@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mergit — Technical One-Pager</title>
+<meta name="description" content="Mergit architecture and technical execution: verification pipeline, escrow contract design, trust model and delivery plan.">
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --bg:#0a0a0b; --panel:#131316; --panel2:#18181c; --line:#26262c; --line2:#33333a;
+    --red:#ff2d2d; --red-d:#b31f1f; --text:#ededf0; --muted:#8a8a93; --faint:#5b5b64;
+    --green:#3ddc84; --amber:#ffb020; --blue:#59a6ff;
+    --mono:"Cascadia Code",ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sans:"Inter",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  html{ scroll-behavior:smooth; overflow-x:hidden; }
+  body{ background:var(--bg); color:var(--text); font-family:var(--sans); line-height:1.6;
+        -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+  .wrap{ width:100%; max-width:900px; margin:0 auto; padding:0 24px; }
+  a{ color:var(--blue); }
+
+  nav{ position:sticky; top:0; z-index:50; background:rgba(10,10,11,.9);
+       backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }
+  .navin{ display:flex; align-items:center; justify-content:space-between; height:60px;
+          max-width:900px; margin:0 auto; padding:0 24px; }
+  .brand{ font-weight:800; font-size:18px; letter-spacing:-.02em; text-decoration:none; color:var(--text); }
+  .brand .r{ color:var(--red); }
+  .navback{ font-size:13.5px; color:var(--muted); text-decoration:none; }
+  .navback:hover{ color:var(--text); }
+
+  header{ padding:64px 0 40px; border-bottom:1px solid var(--line); }
+  .eyebrow{ font-family:var(--mono); font-size:12px; letter-spacing:.2em; color:var(--red);
+            text-transform:uppercase; margin-bottom:16px; }
+  h1{ font-size:clamp(32px,5.5vw,48px); font-weight:820; letter-spacing:-.03em; line-height:1.08; }
+  .lede{ font-size:18px; color:var(--muted); margin-top:18px; }
+  .facts{ display:flex; gap:12px; margin-top:26px; flex-wrap:wrap; }
+  .fact{ font-family:var(--mono); font-size:12px; border:1px solid var(--line2); border-radius:8px;
+         padding:8px 13px; color:var(--muted); }
+  .fact b{ color:var(--text); font-weight:600; }
+  .fact.live{ border-color:#1d4a30; color:var(--green); background:#0c1a12; }
+
+  section{ padding:52px 0; border-bottom:1px solid var(--line); }
+  h2{ font-size:27px; font-weight:750; letter-spacing:-.02em; margin-bottom:8px; }
+  h2 .num{ font-family:var(--mono); font-size:14px; color:var(--red); margin-right:12px;
+           letter-spacing:.1em; vertical-align:middle; }
+  h3{ font-size:18px; font-weight:680; margin:30px 0 10px; }
+  p{ color:var(--muted); margin-top:12px; }
+  p.lead{ color:var(--text); }
+  strong{ color:var(--text); font-weight:600; }
+  ul{ margin:14px 0 0 20px; color:var(--muted); }
+  li{ margin-bottom:9px; }
+  li b{ color:var(--text); font-weight:600; }
+  code{ font-family:var(--mono); font-size:.9em; background:var(--panel2); border:1px solid var(--line);
+        border-radius:5px; padding:1.5px 6px; color:var(--text); }
+
+  table{ width:100%; border-collapse:collapse; margin-top:20px; font-size:14.5px; }
+  th{ text-align:left; font-family:var(--mono); font-size:11.5px; letter-spacing:.13em;
+      text-transform:uppercase; color:var(--faint); font-weight:400; padding:0 14px 11px 0;
+      border-bottom:1px solid var(--line); }
+  td{ padding:14px 14px 14px 0; border-bottom:1px solid var(--line); color:var(--muted);
+      vertical-align:top; }
+  td b, td strong{ color:var(--text); }
+  .tblwrap{ overflow-x:auto; }
+
+  .box{ background:var(--panel); border:1px solid var(--line); border-radius:12px;
+        padding:22px 24px; margin-top:22px; }
+  .box.warn{ border-color:#4a3a12; background:#141009; }
+  .box.good{ border-color:#1d4a30; background:#0c1a12; }
+  .box h4{ font-size:15px; font-weight:700; margin-bottom:8px; }
+  .box.warn h4{ color:var(--amber); }
+  .box.good h4{ color:var(--green); }
+  .box p{ margin-top:6px; font-size:14.5px; }
+
+  figure{ margin:26px 0 0; }
+  figure svg{ width:100%; height:auto; display:block; }
+  figcaption{ font-size:13px; color:var(--faint); margin-top:12px; font-family:var(--mono); }
+
+  pre{ background:#0d0d10; border:1px solid var(--line); border-radius:10px; padding:18px 20px;
+       overflow-x:auto; margin-top:18px; font-family:var(--mono); font-size:13px; line-height:1.75;
+       color:var(--muted); max-width:100%; }
+  pre .k{ color:var(--red); } pre .g{ color:var(--green); } pre .c{ color:var(--faint); }
+  pre .b{ color:var(--blue); }
+
+  footer{ padding:44px 0 64px; font-size:13.5px; color:var(--faint); }
+  footer a{ color:var(--muted); }
+
+  @media (max-width:640px){
+    .wrap,.navin{ padding:0 18px; }
+    section{ padding:40px 0; }
+    h2 .num{ display:block; margin-bottom:6px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="navin">
+    <a class="brand" href="/">MERG<span class="r">IT</span></a>
+    <a class="navback" href="/">← back to the product</a>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Technical one-pager · GASOK 2026 · Track 04 AI / Web3</div>
+    <h1>How Mergit verifies work<br>and releases money.</h1>
+    <p class="lede">Architecture, contract design, trust model and delivery plan for a bounty
+      protocol where an AI agent — not a committee — decides that a developer has been paid.</p>
+    <div class="facts">
+      <span class="fact live">● escrow live on GIWA Sepolia</span>
+      <span class="fact"><b>chain</b> 91342</span>
+      <span class="fact"><b>solc</b> 0.8.24</span>
+      <span class="fact"><b>tests</b> 14 passing</span>
+      <span class="fact"><b>team</b> 1</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── 01 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">01</span>The problem, stated precisely</h2>
+    <p class="lead">Retroactive funding works. Verifying it doesn't scale.</p>
+    <p>Optimism's Retro Funding allocated over 100M OP to builders and proved the thesis: paying
+      for impact after it happens beats paying for promises. But every round runs on human
+      badgeholders reading submissions. Gitcoin distributes tens of millions and still fights
+      sybils with identity heuristics. Both are slow because the same step is manual — <strong>someone
+      has to decide whether the work is real</strong>.</p>
+    <p>That step is not actually subjective for most developer work. A merged pull request, a green
+      CI run, a verified contract whose bytecode matches the merged commit — these are checkable
+      facts. They were left to humans because reading a diff and judging whether it satisfies a
+      spec required a human. That constraint no longer holds.</p>
+    <p>The cost of leaving it manual is concrete for a young chain: <strong>a developer who ships today
+      gets paid next quarter, if ever</strong>. Ecosystems compete for builders, and payment latency is
+      a recruiting metric.</p>
+  </div>
+</section>
+
+<!-- ── 02 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">02</span>System architecture</h2>
+    <p>Four components. Only one of them holds money, and it is the simplest one on purpose.</p>
+
+    <figure>
+      <svg viewBox="0 0 860 400" xmlns="http://www.w3.org/2000/svg" font-family="Cascadia Code,Consolas,monospace">
+        <defs>
+          <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#ff2d2d"/>
+          </marker>
+          <marker id="arm" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#5b5b64"/>
+          </marker>
+        </defs>
+
+        <!-- sources -->
+        <rect x="8" y="20" width="176" height="104" rx="9" fill="#131316" stroke="#26262c"/>
+        <text x="24" y="46" fill="#8a8a93" font-size="11" letter-spacing="1.6">SOURCES OF TRUTH</text>
+        <text x="24" y="70" fill="#ededf0" font-size="13">GitHub App</text>
+        <text x="24" y="89" fill="#5b5b64" font-size="11">PRs · commits · CI runs</text>
+        <text x="24" y="110" fill="#ededf0" font-size="13">GIWA RPC + explorer</text>
+
+        <!-- agent -->
+        <rect x="248" y="8" width="212" height="180" rx="9" fill="#18181c" stroke="#b31f1f"/>
+        <text x="266" y="34" fill="#ff2d2d" font-size="11" letter-spacing="1.6">VERIFICATION AGENT</text>
+        <text x="266" y="60" fill="#ededf0" font-size="13">1 · collect signals</text>
+        <text x="266" y="83" fill="#ededf0" font-size="13">2 · check the diff</text>
+        <text x="266" y="106" fill="#ededf0" font-size="13">3 · score confidence</text>
+        <text x="266" y="129" fill="#ededf0" font-size="13">4 · sign the verdict</text>
+        <text x="266" y="160" fill="#5b5b64" font-size="11">deterministic checks first;</text>
+        <text x="266" y="176" fill="#5b5b64" font-size="11">the LLM only judges the diff</text>
+
+        <!-- contract -->
+        <rect x="524" y="20" width="212" height="104" rx="9" fill="#0c1a12" stroke="#1d4a30"/>
+        <text x="542" y="46" fill="#3ddc84" font-size="11" letter-spacing="1.6">MERGITESCROW · ON-CHAIN</text>
+        <text x="542" y="70" fill="#ededf0" font-size="13">holds the funds</text>
+        <text x="542" y="89" fill="#ededf0" font-size="13">enforces who may release</text>
+        <text x="542" y="110" fill="#ededf0" font-size="13">logs the evidence hash</text>
+
+        <!-- clients -->
+        <rect x="248" y="266" width="212" height="92" rx="9" fill="#131316" stroke="#26262c"/>
+        <text x="266" y="292" fill="#8a8a93" font-size="11" letter-spacing="1.6">CLIENTS</text>
+        <text x="266" y="316" fill="#ededf0" font-size="13">bounty board (web)</text>
+        <text x="266" y="337" fill="#ededf0" font-size="13">funder &amp; developer views</text>
+
+        <rect x="524" y="266" width="212" height="92" rx="9" fill="#131316" stroke="#26262c"/>
+        <text x="542" y="292" fill="#8a8a93" font-size="11" letter-spacing="1.6">FUNDERS</text>
+        <text x="542" y="316" fill="#ededf0" font-size="13">protocols · DAOs</text>
+        <text x="542" y="337" fill="#ededf0" font-size="13">ecosystem funds</text>
+
+        <!-- arrows -->
+        <line x1="186" y1="72" x2="242" y2="72" stroke="#5b5b64" stroke-width="1.6" marker-end="url(#arm)"/>
+        <text x="188" y="63" fill="#5b5b64" font-size="10">read</text>
+
+        <line x1="462" y1="72" x2="518" y2="72" stroke="#ff2d2d" stroke-width="1.8" marker-end="url(#ar)"/>
+        <text x="464" y="63" fill="#ff2d2d" font-size="10">settle()</text>
+
+        <line x1="630" y1="262" x2="630" y2="130" stroke="#5b5b64" stroke-width="1.6" marker-end="url(#arm)"/>
+        <text x="640" y="200" fill="#5b5b64" font-size="10">postBounty() + ETH</text>
+
+        <line x1="354" y1="262" x2="354" y2="194" stroke="#5b5b64" stroke-width="1.6" marker-end="url(#arm)"/>
+        <text x="364" y="232" fill="#5b5b64" font-size="10">read state</text>
+      </svg>
+      <figcaption>Money only ever moves inside MergitEscrow. The agent has no custody — it holds one
+        permission: naming the recipient of an already-locked bounty.</figcaption>
+    </figure>
+
+    <h3>Why the split matters</h3>
+    <p>The agent is the complicated, fallible, upgradeable part. The contract is the simple,
+      immutable part. Keeping intelligence off-chain and custody on-chain means a bug in the agent
+      can misjudge a bounty, but <strong>cannot drain the escrow, pay itself, or alter an amount</strong>.
+      That boundary is the whole security argument.</p>
+  </div>
+</section>
+
+<!-- ── 03 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">03</span>The verification pipeline</h2>
+    <p>Verification runs as a funnel: cheap deterministic checks reject most work before any model
+      is invoked, and model judgement is confined to the one question that genuinely needs it.</p>
+
+    <div class="tblwrap">
+      <table>
+        <tr><th style="width:24%">Stage</th><th style="width:38%">Check</th><th>Nature</th></tr>
+        <tr>
+          <td><b>Provenance</b></td>
+          <td>PR exists, targets the bounty's repo, author owns the claiming wallet</td>
+          <td>Deterministic — GitHub API + signed wallet linkage</td>
+        </tr>
+        <tr>
+          <td><b>Integrity</b></td>
+          <td>Merged to the default branch by a maintainer, not self-merged; commit is an ancestor of HEAD</td>
+          <td>Deterministic — rejects the most common gaming vector</td>
+        </tr>
+        <tr>
+          <td><b>Execution</b></td>
+          <td>CI green on the merge commit; test count and coverage did not regress</td>
+          <td>Deterministic — CI provider API</td>
+        </tr>
+        <tr>
+          <td><b>Deployment</b></td>
+          <td>Where the bounty requires it: contract verified on GIWA and bytecode matches the merged commit</td>
+          <td>Deterministic — explorer + local recompile</td>
+        </tr>
+        <tr>
+          <td><b>Substance</b></td>
+          <td>Does the diff actually satisfy the bounty spec, or does it merely touch the right files?</td>
+          <td><b>Model judgement</b> — the only step requiring an LLM</td>
+        </tr>
+        <tr>
+          <td><b>Sybil signals</b></td>
+          <td>Recycled code, contribution history, timing patterns across the funder's bounties</td>
+          <td>Heuristics + model, scored not gated</td>
+        </tr>
+      </table>
+    </div>
+
+    <p>Each stage emits a signal; the aggregate produces a confidence score. Only a run that clears
+      every deterministic gate <em>and</em> exceeds the confidence threshold reaches
+      <code>settle()</code>. Everything below the threshold is escalated to the funder rather than
+      auto-rejected — <strong>a false negative costs a review, a false positive costs money</strong>, so the
+      asymmetry is deliberate.</p>
+
+    <h3>What gets recorded</h3>
+    <p>The agent hashes the full evidence bundle and passes it to the contract, so any payout can be
+      audited after the fact against what the agent claimed to have seen.</p>
+<pre><span class="c">// evidence preimage — stored off-chain, hash recorded on-chain</span>
+<span class="b">repo</span>:odiseo159-beep/celo-sentinel<span class="k">|</span><span class="b">task</span>:giwa-escrow-demo<span class="k">|</span><span class="b">verifier</span>:mergit-agent-v0
+
+<span class="c">// emitted by MergitEscrow.settle()</span>
+<span class="g">BountySettled</span>(bountyId, developer, verifier, paidToDeveloper, protocolFee, <span class="b">evidenceHash</span>)</pre>
+  </div>
+</section>
+
+<!-- ── 04 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">04</span>Contract design</h2>
+    <p><code>MergitEscrow</code> is deployed and source-verified on GIWA Sepolia at
+      <a href="https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879" target="_blank" rel="noopener">0xffcf20…5879</a>.
+      It is intentionally small: a bounty is a five-field struct and there are three state
+      transitions.</p>
+
+<pre>         postBounty()              settle()
+   ∅ ──────────────────▶ <span class="g">Open</span> ─────────────────▶ <span class="g">Settled</span>
+        (locks ETH)        │      only verifier,
+                           │      before deadline
+                           │ refund()
+                           └─────────────────▶ <span class="g">Refunded</span>
+                                  only funder,
+                                  after deadline</pre>
+
+    <h3>Invariants the code enforces</h3>
+    <ul>
+      <li><b>No owner, no pause, no upgradeability.</b> There is no admin function. Nobody — including
+        the author — can move funds held for someone else.</li>
+      <li><b>The verifier's power is bounded to one choice.</b> It selects the recipient. It cannot
+        redirect funds to itself, change the amount, settle twice, or settle after the deadline.</li>
+      <li><b>The fee is immutable</b>, set in the constructor and hard-capped at 5%
+        (<code>MAX_FEE_BPS</code>) in code, so it cannot be raised on existing escrows.</li>
+      <li><b>Funds are always claimable.</b> Every bounty terminates in either a payout or a refund;
+        there is no path where ETH is stranded.</li>
+      <li><b>Reentrancy</b>: checks-effects-interactions ordering plus a guard on both value-moving
+        functions; status is written before any external call.</li>
+    </ul>
+
+    <p>14 tests cover the permission matrix, double-settlement, deadline boundaries, fee arithmetic,
+      isolation between concurrent bounties, and the invariant that the contract retains no dust
+      after settlement.</p>
+
+    <div class="box good">
+      <h4>Already exercised on-chain</h4>
+      <p>A complete lifecycle has run on GIWA Sepolia — 0.0005 ETH locked, then released to a
+        developer address by the verifier, 1.5% fee taken, evidence hash recorded. See the
+        <a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7" target="_blank" rel="noopener">settlement transaction</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 05 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">05</span>Trust model — and how it shrinks</h2>
+    <p class="lead">The honest position: today the verifier is trusted to judge correctly.</p>
+    <p>It is not trusted with custody, amounts, or timing — the contract removes those. But a funder
+      posting a bounty is trusting that the agent will not name the wrong developer. Claiming
+      otherwise would be dishonest, so here is the actual reduction path.</p>
+
+    <div class="tblwrap">
+      <table>
+        <tr><th style="width:22%">Phase</th><th style="width:39%">Mechanism</th><th>What the verifier can still do wrong</th></tr>
+        <tr>
+          <td><b>Now</b></td>
+          <td>Bounded permissions + public evidence hash</td>
+          <td>Name the wrong recipient; detectable after the fact, not preventable</td>
+        </tr>
+        <tr>
+          <td><b>Phase 2</b></td>
+          <td><b>Optimistic challenge window</b> — settlement queues for N hours; the funder can veto before funds move</td>
+          <td>Nothing silently: any bad verdict is vetoable by the party who put up the money</td>
+        </tr>
+        <tr>
+          <td><b>Phase 3</b></td>
+          <td><b>Multi-agent quorum</b> — k-of-n independent verifiers with distinct prompts must agree</td>
+          <td>Requires collusion across independently operated agents</td>
+        </tr>
+        <tr>
+          <td><b>Beyond</b></td>
+          <td>Verifier bonds slashable on a successful challenge; attestation of the agent's execution</td>
+          <td>Misjudgement becomes economically irrational</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="box warn">
+      <h4>Known limitation of the current testnet demo</h4>
+      <p>In the lifecycle executed so far, the funder, verifier and fee recipient are the same
+        address — a single operator demonstrating the mechanism end to end. The developer is a
+        separate party, which is the part that exercises the payout path. Independent funders and
+        agents are Phase 2 work, not a property of the current deployment.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 06 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">06</span>Stack and execution</h2>
+    <div class="tblwrap">
+      <table>
+        <tr><th style="width:28%">Layer</th><th>Choice and rationale</th></tr>
+        <tr><td><b>Contracts</b></td><td>Solidity 0.8.24, Hardhat 3, optimizer 200 runs. Verified via the GIWA Blockscout API.</td></tr>
+        <tr><td><b>Chain</b></td><td>GIWA (OP Stack). EVM-equivalent, so the escrow deploys unchanged from any EVM experience; sub-second blocks keep settlement perceptibly instant.</td></tr>
+        <tr><td><b>Agent</b></td><td>TypeScript. Deterministic checks against the GitHub and explorer APIs; a single constrained LLM call for diff-vs-spec judgement, with the prompt and evidence bundle persisted per verdict.</td></tr>
+        <tr><td><b>Chain access</b></td><td>viem — already used in production by the author for x402 machine-to-machine payments, the same primitive class as agent-triggered settlement.</td></tr>
+        <tr><td><b>Frontend</b></td><td>Static, no build step. Deployed on Vercel.</td></tr>
+      </table>
+    </div>
+
+    <h3>Delivery plan</h3>
+    <div class="tblwrap">
+      <table>
+        <tr><th style="width:26%">Phase</th><th style="width:16%">Status</th><th>Deliverable</th></tr>
+        <tr><td><b>1 · Screening</b></td><td><span style="color:var(--green)">done</span></td><td>Escrow deployed and verified on GIWA Sepolia; lifecycle settled on-chain; product walkthrough live</td></tr>
+        <tr><td><b>2 · Testnet MVP</b></td><td>next</td><td>GitHub App, verification agent v1 against real repositories, challenge window, bounty board</td></tr>
+        <tr><td><b>3 · Mainnet</b></td><td>Aug–Sep</td><td>Stablecoin payouts, first partner protocols posting live bounties, fee switch on</td></tr>
+        <tr><td><b>Demoday · KBW</b></td><td>Sep</td><td>Merge a pull request on stage; payment lands in seconds</td></tr>
+        <tr><td><b>Beyond</b></td><td>—</td><td>Automated retroactive funding pools; builder reputation graph derived from verified work</td></tr>
+      </table>
+    </div>
+
+    <h3>Economics</h3>
+    <p>A percentage fee is taken only when a bounty actually settles — no settlement, no fee, so
+      funders risk nothing on bounties nobody fills. Revenue therefore tracks work funded, not
+      speculation. Later phases add fees on retroactive funding pools distributed through the agent,
+      and verified-work history becomes a reputation primitive other protocols can consume.</p>
+  </div>
+</section>
+
+<!-- ── 07 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">07</span>Verify these claims yourself</h2>
+    <div class="tblwrap">
+      <table>
+        <tr><th style="width:32%">Claim</th><th>Where to check it</th></tr>
+        <tr><td>Contract deployed and verified</td><td><a href="https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879" target="_blank" rel="noopener">sepolia-explorer.giwa.io/address/0xffcf20…5879</a></td></tr>
+        <tr><td>Bounty funded on-chain</td><td><a href="https://sepolia-explorer.giwa.io/tx/0x356a876c4be477158e0916a0b16f6b6d3075d9703a8cd2bf377c5dbeb9f3e44d" target="_blank" rel="noopener">postBounty transaction</a></td></tr>
+        <tr><td>Developer paid, evidence logged</td><td><a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7" target="_blank" rel="noopener">settle transaction</a></td></tr>
+        <tr><td>Source, tests and scripts</td><td><a href="https://github.com/odiseo159-beep/mergit" target="_blank" rel="noopener">github.com/odiseo159-beep/mergit</a></td></tr>
+        <tr><td>Product walkthrough</td><td><a href="/">mergit-nine.vercel.app</a> — the interactive demo there is simulated and labelled as such</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b style="color:var(--muted)">MERGIT</b> — Merge it. Get paid. ·
+    Daniel Bryan Francia Asencio ·
+    <a href="https://github.com/odiseo159-beep" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="https://x.com/Thecomodor159" target="_blank" rel="noopener">X</a> ·
+    SimplifAI S.A.C., Lima, Peru
+  </div>
+</footer>
+
+</body>
+</html>
