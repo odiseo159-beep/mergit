@@ -1,0 +1,16 @@
+{
+  "contract": "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879",
+  "bountyId": 2,
+  "amount": "0.0005",
+  "agent": "0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b",
+  "developer": "0x23E8541dA96158d342477D694274E27639807686",
+  "evidence": "repo:odiseo159-beep/celo-sentinel|task:giwa-escrow-demo|verifier:mergit-agent-v0",
+  "evidenceHash": "0x461490d3fb408a2a5e2b0c043657e72deb01cbb36a3c89fd48e7725e34f234b2",
+  "postBountyTx": "0x356a876c4be477158e0916a0b16f6b6d3075d9703a8cd2bf377c5dbeb9f3e44d",
+  "settleTx": "0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7",
+  "explorer": {
+    "contract": "https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879",
+    "postBounty": "https://sepolia-explorer.giwa.io/tx/0x356a876c4be477158e0916a0b16f6b6d3075d9703a8cd2bf377c5dbeb9f3e44d",
+    "settle": "https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7"
+  }
+}

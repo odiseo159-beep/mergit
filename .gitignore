@@ -1,0 +1,21 @@
+# ⚠️ claves privadas — nunca commitear
+WALLETS.secret.json
+*.secret.json
+.env
+.env.*
+
+# dependencias y artefactos de build
+node_modules/
+contracts/artifacts/
+contracts/cache/
+contracts/types/
+
+# despliegue de Vercel
+site/.vercel/
+
+# notas internas de la aplicación (no son para el público)
+APPLICATION.md
+form-answers.md
+
+# materiales de la aplicación: se entregan por el formulario, no por el repo
+pitch-deck/
