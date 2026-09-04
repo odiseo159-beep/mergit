@@ -16,6 +16,7 @@ site/.vercel/
 # notas internas de la aplicación (no son para el público)
 APPLICATION.md
 form-answers.md
+CLAUDE.md
 
 # materiales de la aplicación: se entregan por el formulario, no por el repo
 pitch-deck/
