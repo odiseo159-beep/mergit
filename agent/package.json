@@ -1,0 +1,13 @@
+{
+  "name": "mergit-agent",
+  "version": "0.1.0",
+  "description": "Verification agent for Mergit — reads real pull requests and decides whether the work exists",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.55.10"
+  }
+}
