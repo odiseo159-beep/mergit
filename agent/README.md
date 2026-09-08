@@ -12,7 +12,13 @@ node verify.mjs https://github.com/owner/repo/pull/123
 # Verify, then settle bounty #2 on GIWA Sepolia (dry run by default)
 node settle.mjs --bounty 2 --pr owner/repo#123
 node settle.mjs --bounty 2 --pr owner/repo#123 --developer 0x... --send
+
+# Open a bounty to settle against (the funder's side of the loop)
+node post-bounty.mjs --uri "github.com/owner/repo/issues/1" --amount 0.0005 --send
 ```
+
+`chain.mjs` holds the chain definition, the escrow ABI and the shared helpers.
+`verify.mjs` is both a CLI and a library: `settle.mjs` imports its verdict.
 
 `GITHUB_TOKEN` is optional: without it the agent reads public repositories at
 60 requests per hour. `MERGIT_ESCROW` overrides the contract address, which

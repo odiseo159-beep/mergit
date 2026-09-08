@@ -12,6 +12,7 @@
 // GITHUB_TOKEN en el entorno sube a 5000 y alcanza repos privados.
 import { keccak256, toHex } from "viem";
 import { pathToFileURL } from "node:url";
+import { parseTarget } from "./chain.mjs";
 
 const API = "https://api.github.com";
 
@@ -20,16 +21,6 @@ const API = "https://api.github.com";
 const PASSING = new Set(["success", "neutral", "skipped"]);
 
 // ───────────────────────────── Entrada ─────────────────────────────
-
-/** Acepta la URL del PR o la forma corta owner/repo#123. */
-function parseTarget(raw) {
-  if (!raw) return null;
-  const url = raw.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-  if (url) return { owner: url[1], repo: url[2], number: Number(url[3]) };
-  const short = raw.match(/^([^/\s]+)\/([^#\s]+)#(\d+)$/);
-  if (short) return { owner: short[1], repo: short[2], number: Number(short[3]) };
-  return null;
-}
 
 async function gh(path) {
   const headers = {

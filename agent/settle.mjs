@@ -9,135 +9,44 @@
 //
 // Sin --send no se firma nada: simula la transacción contra la cadena y
 // reporta qué pasaría. Es el modo por defecto a propósito.
-import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  formatEther,
-  decodeEventLog,
-} from "viem";
+import { createWalletClient, http, formatEther, decodeEventLog } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { readFileSync, existsSync } from "node:fs";
+import {
+  giwaSepolia,
+  EXPLORER,
+  ABI,
+  STATUS,
+  publicClient,
+  fail,
+  loadSecrets,
+  escrowAddress,
+  parseTarget,
+  args,
+} from "./chain.mjs";
 import { verifyPullRequest } from "./verify.mjs";
 
-const giwaSepolia = {
-  id: 91342,
-  name: "GIWA Sepolia",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: ["https://sepolia-rpc.giwa.io"] } },
-  blockExplorers: { default: { name: "GIWA Explorer", url: "https://sepolia-explorer.giwa.io" } },
-};
-const EXPLORER = giwaSepolia.blockExplorers.default.url;
-
-// ABI mínimo: solo lo que el agente necesita. Así este directorio no depende
-// de que alguien haya compilado los contratos antes.
-const ABI = [
-  {
-    type: "function",
-    name: "getBounty",
-    stateMutability: "view",
-    inputs: [{ name: "bountyId", type: "uint256" }],
-    outputs: [
-      {
-        type: "tuple",
-        components: [
-          { name: "funder", type: "address" },
-          { name: "verifier", type: "address" },
-          { name: "amount", type: "uint256" },
-          { name: "deadline", type: "uint64" },
-          { name: "status", type: "uint8" },
-        ],
-      },
-    ],
-  },
-  {
-    type: "function",
-    name: "quote",
-    stateMutability: "view",
-    inputs: [{ name: "amount", type: "uint256" }],
-    outputs: [
-      { name: "payout", type: "uint256" },
-      { name: "fee", type: "uint256" },
-    ],
-  },
-  {
-    type: "function",
-    name: "settle",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "bountyId", type: "uint256" },
-      { name: "developer", type: "address" },
-      { name: "evidenceHash", type: "bytes32" },
-    ],
-    outputs: [],
-  },
-  {
-    type: "event",
-    name: "BountySettled",
-    inputs: [
-      { name: "bountyId", type: "uint256", indexed: true },
-      { name: "developer", type: "address", indexed: true },
-      { name: "verifier", type: "address", indexed: true },
-      { name: "paidToDeveloper", type: "uint256", indexed: false },
-      { name: "protocolFee", type: "uint256", indexed: false },
-      { name: "evidenceHash", type: "bytes32", indexed: false },
-    ],
-  },
-];
-
-const STATUS = ["None", "Open", "Settled", "Refunded"];
-
-// ───────────────────────────── Argumentos ──────────────────────────
-
-const argv = process.argv.slice(2);
-const flag = (name) => {
-  const i = argv.indexOf(`--${name}`);
-  return i === -1 ? null : argv[i + 1];
-};
-
-const bountyId = flag("bounty");
-const prTarget = flag("pr");
-const send = argv.includes("--send");
+const arg = args();
+const bountyId = arg.value("bounty");
+const prTarget = arg.value("pr");
+const send = arg.has("send");
 
 if (!bountyId || !prTarget) {
   console.error("uso: node settle.mjs --bounty <id> --pr <url|owner/repo#n> [--developer 0x...] [--send]");
   process.exit(2);
 }
 
-const fail = (msg) => {
-  console.error(`\nabortado: ${msg}`);
-  process.exit(1);
-};
+const target = parseTarget(prTarget) ?? fail(`no entiendo el pull request: ${prTarget}`);
 
-function parseTarget(raw) {
-  const url = raw.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-  if (url) return { owner: url[1], repo: url[2], number: Number(url[3]) };
-  const short = raw.match(/^([^/\s]+)\/([^#\s]+)#(\d+)$/);
-  if (short) return { owner: short[1], repo: short[2], number: Number(short[3]) };
-  return fail(`no entiendo el pull request: ${raw}`);
-}
-
-// ─────────────────────────── Configuración ─────────────────────────
-
-const SECRETS = new URL("../WALLETS.secret.json", import.meta.url);
-const secrets = existsSync(SECRETS) ? JSON.parse(readFileSync(SECRETS, "utf8")) : null;
-
-const deploymentPath = new URL("../contracts/deployment.json", import.meta.url);
-const escrowAddress =
-  process.env.MERGIT_ESCROW ??
-  (existsSync(deploymentPath) ? JSON.parse(readFileSync(deploymentPath, "utf8")).address : null);
-if (!escrowAddress) fail("no sé dónde está el escrow. Define MERGIT_ESCROW o deja contracts/deployment.json en su sitio.");
-
-const developer = flag("developer") ?? secrets?.developer?.address;
+const secrets = loadSecrets();
+const developer = arg.value("developer") ?? secrets?.developer?.address;
 if (!developer) fail("falta la dirección del desarrollador: pásala con --developer 0x...");
 
-const publicClient = createPublicClient({ chain: giwaSepolia, transport: http() });
-const contract = { address: escrowAddress, abi: ABI };
+const contract = { address: escrowAddress(), abi: ABI };
 
 // ───────────────────────── 1. ¿Existe el trabajo? ──────────────────
 
 console.log("1. verificando el pull request\n");
-const result = await verifyPullRequest(parseTarget(prTarget));
+const result = await verifyPullRequest(target);
 console.log(`   ${result.evidence.repository}#${result.evidence.pullRequest} por ${result.evidence.author}`);
 console.log(`   mergeado: ${result.merged ? "sí" : "no"} · CI: ${result.ciReason}`);
 console.log(`   evidencia: ${result.evidenceHash}`);
@@ -152,7 +61,7 @@ let bounty;
 try {
   bounty = await publicClient.readContract({ ...contract, functionName: "getBounty", args: [BigInt(bountyId)] });
 } catch {
-  fail(`el bounty ${bountyId} no existe en ${escrowAddress}`);
+  fail(`el bounty ${bountyId} no existe en ${contract.address}`);
 }
 
 const [payout, fee] = await publicClient.readContract({
@@ -161,7 +70,7 @@ const [payout, fee] = await publicClient.readContract({
   args: [bounty.amount],
 });
 
-console.log(`   escrow     : ${escrowAddress}`);
+console.log(`   escrow     : ${contract.address}`);
 console.log(`   bounty     : #${bountyId} · ${STATUS[bounty.status]} · ${formatEther(bounty.amount)} ETH`);
 console.log(`   verificador: ${bounty.verifier}`);
 console.log(`   reparto    : ${formatEther(payout)} ETH al desarrollador, ${formatEther(fee)} ETH de comisión`);
