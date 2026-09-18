@@ -9,8 +9,12 @@
 //
 // Sin --send no se firma nada: simula la transacción contra la cadena y
 // reporta qué pasaría. Es el modo por defecto a propósito.
+//
+// También es una librería: on-event.mjs llama a settleBounty() cuando GitHub
+// avisa de un merge o de un CI terminado.
 import { createWalletClient, http, formatEther, decodeEventLog } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { pathToFileURL } from "node:url";
 import {
   giwaSepolia,
   EXPLORER,
@@ -25,109 +29,142 @@ import {
 } from "./chain.mjs";
 import { verifyPullRequest } from "./verify.mjs";
 
-const arg = args();
-const bountyId = arg.value("bounty");
-const prTarget = arg.value("pr");
-const send = arg.has("send");
-
-if (!bountyId || !prTarget) {
-  console.error("uso: node settle.mjs --bounty <id> --pr <url|owner/repo#n> [--developer 0x...] [--send]");
-  process.exit(2);
+/** La clave del agente: variable de entorno en CI, archivo local en la laptop. */
+function agentKey() {
+  return process.env.MERGIT_AGENT_KEY || loadSecrets()?.deployer?.privateKey || null;
 }
 
-const target = parseTarget(prTarget) ?? fail(`no entiendo el pull request: ${prTarget}`);
+/**
+ * Todo el camino, sin imprimir nada. Devuelve un resultado estructurado con la
+ * etapa donde terminó, para que quien llame decida cómo contarlo.
+ *
+ *   stage: "verify" | "bounty" | "simulate" | "dry-run" | "paid"
+ *   ok:    true solo en "dry-run" y "paid"
+ *   done:  true si el bounty ya no estaba abierto (otra corrida lo pagó antes)
+ */
+export async function settleBounty({ bountyId, target, developer, send = false }) {
+  const contract = { address: escrowAddress(), abi: ABI };
+  const result = { bountyId: String(bountyId), escrow: contract.address, developer };
 
-const secrets = loadSecrets();
-const developer = arg.value("developer") ?? secrets?.developer?.address;
-if (!developer) fail("falta la dirección del desarrollador: pásala con --developer 0x...");
+  // 1. ¿Existe el trabajo?
+  const verdict = await verifyPullRequest(target);
+  result.verdict = verdict;
+  if (!verdict.verdict) return { ...result, stage: "verify", ok: false, reason: verdict.reasons.join("; ") };
 
-const contract = { address: escrowAddress(), abi: ABI };
-
-// ───────────────────────── 1. ¿Existe el trabajo? ──────────────────
-
-console.log("1. verificando el pull request\n");
-const result = await verifyPullRequest(target);
-console.log(`   ${result.evidence.repository}#${result.evidence.pullRequest} por ${result.evidence.author}`);
-console.log(`   mergeado: ${result.merged ? "sí" : "no"} · CI: ${result.ciReason}`);
-console.log(`   evidencia: ${result.evidenceHash}`);
-
-if (!result.verdict) fail(`el trabajo no pasa la verificación (${result.reasons.join("; ")})`);
-console.log("   veredicto: PAGAR\n");
-
-// ──────────────────── 2. ¿El bounty admite el pago? ────────────────
-
-console.log("2. revisando el bounty on-chain\n");
-let bounty;
-try {
-  bounty = await publicClient.readContract({ ...contract, functionName: "getBounty", args: [BigInt(bountyId)] });
-} catch {
-  fail(`el bounty ${bountyId} no existe en ${contract.address}`);
-}
-
-const [payout, fee] = await publicClient.readContract({
-  ...contract,
-  functionName: "quote",
-  args: [bounty.amount],
-});
-
-console.log(`   escrow     : ${contract.address}`);
-console.log(`   bounty     : #${bountyId} · ${STATUS[bounty.status]} · ${formatEther(bounty.amount)} ETH`);
-console.log(`   verificador: ${bounty.verifier}`);
-console.log(`   reparto    : ${formatEther(payout)} ETH al desarrollador, ${formatEther(fee)} ETH de comisión`);
-console.log(`   destino    : ${developer}\n`);
-
-if (STATUS[bounty.status] !== "Open") fail(`el bounty está ${STATUS[bounty.status]}, no Open`);
-if (BigInt(bounty.deadline) <= BigInt(Math.floor(Date.now() / 1000))) {
-  fail("el plazo del bounty ya venció; ahora solo cabe el reembolso al financiador");
-}
-
-// ─────────────────── 3. Simular, y solo después firmar ─────────────
-
-const agentKey = secrets?.deployer?.privateKey;
-if (!agentKey) fail("no encuentro la clave del agente en WALLETS.secret.json");
-const agent = privateKeyToAccount(agentKey);
-
-if (agent.address.toLowerCase() !== bounty.verifier.toLowerCase()) {
-  fail(`este agente (${agent.address}) no es el verificador del bounty (${bounty.verifier})`);
-}
-
-console.log("3. simulando la liquidación\n");
-const { request } = await publicClient.simulateContract({
-  ...contract,
-  functionName: "settle",
-  args: [BigInt(bountyId), developer, result.evidenceHash],
-  account: agent,
-});
-console.log("   la cadena acepta la transacción\n");
-
-if (!send) {
-  console.log("ensayo, no se firmó nada. Repite con --send para liquidar de verdad.");
-  process.exit(0);
-}
-
-// ─────────────────────────── 4. Liquidar ───────────────────────────
-
-const balance = await publicClient.getBalance({ address: agent.address });
-console.log(`4. liquidando desde ${agent.address} (saldo ${formatEther(balance)} ETH)\n`);
-
-const wallet = createWalletClient({ account: agent, chain: giwaSepolia, transport: http() });
-const hash = await wallet.writeContract(request);
-console.log(`   tx enviada: ${hash}`);
-
-const receipt = await publicClient.waitForTransactionReceipt({ hash });
-console.log(`   confirmada en el bloque ${receipt.blockNumber} (gas ${receipt.gasUsed})\n`);
-
-for (const log of receipt.logs) {
+  // 2. ¿El bounty admite el pago?
+  let bounty;
   try {
-    const event = decodeEventLog({ abi: ABI, data: log.data, topics: log.topics });
-    if (event.eventName !== "BountySettled") continue;
-    console.log(`   pagado al desarrollador: ${formatEther(event.args.paidToDeveloper)} ETH`);
-    console.log(`   comisión de protocolo  : ${formatEther(event.args.protocolFee)} ETH`);
-    console.log(`   evidencia on-chain     : ${event.args.evidenceHash}`);
-    console.log(`   coincide con el paso 1 : ${event.args.evidenceHash === result.evidenceHash ? "sí" : "NO"}`);
+    bounty = await publicClient.readContract({ ...contract, functionName: "getBounty", args: [BigInt(bountyId)] });
   } catch {
-    // Un log de otro contrato en el mismo recibo: no es asunto nuestro.
+    return { ...result, stage: "bounty", ok: false, reason: `bounty ${bountyId} does not exist` };
   }
+  const [payout, fee] = await publicClient.readContract({ ...contract, functionName: "quote", args: [bounty.amount] });
+  Object.assign(result, { bounty, status: STATUS[bounty.status], payout, fee });
+
+  if (STATUS[bounty.status] !== "Open") {
+    return { ...result, stage: "bounty", ok: false, done: true, reason: `bounty is ${STATUS[bounty.status]}` };
+  }
+  if (BigInt(bounty.deadline) <= BigInt(Math.floor(Date.now() / 1000))) {
+    return { ...result, stage: "bounty", ok: false, reason: "deadline passed; only a refund to the funder is possible" };
+  }
+
+  // 3. Simular, y solo después firmar
+  const key = agentKey();
+  const account = key ? privateKeyToAccount(key) : null;
+  if (account && account.address.toLowerCase() !== bounty.verifier.toLowerCase()) {
+    return { ...result, stage: "bounty", ok: false, reason: `this agent (${account.address}) is not the bounty's verifier` };
+  }
+  let request;
+  try {
+    ({ request } = await publicClient.simulateContract({
+      ...contract,
+      functionName: "settle",
+      args: [BigInt(bountyId), developer, verdict.evidenceHash],
+      // sin clave se simula como el verificador del bounty: una lectura, no firma nada
+      account: account ?? bounty.verifier,
+    }));
+  } catch (e) {
+    return { ...result, stage: "simulate", ok: false, reason: e.shortMessage ?? e.message };
+  }
+
+  if (!send || !account) return { ...result, stage: "dry-run", ok: true };
+
+  // 4. Liquidar
+  const wallet = createWalletClient({ account, chain: giwaSepolia, transport: http() });
+  const hash = await wallet.writeContract(request);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  let event = null;
+  for (const log of receipt.logs) {
+    try {
+      const e = decodeEventLog({ abi: ABI, data: log.data, topics: log.topics });
+      if (e.eventName === "BountySettled") event = e.args;
+    } catch {
+      // un log ajeno en el mismo recibo
+    }
+  }
+  return {
+    ...result,
+    stage: "paid",
+    ok: true,
+    tx: hash,
+    block: receipt.blockNumber,
+    gasUsed: receipt.gasUsed,
+    event,
+    hashMatches: event?.evidenceHash === verdict.evidenceHash,
+    url: `${EXPLORER}/tx/${hash}`,
+  };
 }
 
-console.log(`\n${EXPLORER}/tx/${hash}`);
+// ─────────────────────────────── CLI ───────────────────────────────
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const arg = args();
+  const bountyId = arg.value("bounty");
+  const prTarget = arg.value("pr");
+  const send = arg.has("send");
+
+  if (!bountyId || !prTarget) {
+    console.error("uso: node settle.mjs --bounty <id> --pr <url|owner/repo#n> [--developer 0x...] [--send]");
+    process.exit(2);
+  }
+  const target = parseTarget(prTarget) ?? fail(`no entiendo el pull request: ${prTarget}`);
+  const developer = arg.value("developer") ?? loadSecrets()?.developer?.address;
+  if (!developer) fail("falta la dirección del desarrollador: pásala con --developer 0x...");
+  if (send && !agentKey()) fail("no encuentro la clave del agente (MERGIT_AGENT_KEY o WALLETS.secret.json)");
+
+  const r = await settleBounty({ bountyId, target, developer, send });
+  const v = r.verdict;
+
+  console.log("1. verificando el pull request\n");
+  console.log(`   ${v.evidence.repository}#${v.evidence.pullRequest} por ${v.evidence.author}`);
+  console.log(`   mergeado: ${v.merged ? "sí" : "no"} · CI: ${v.ciReason}`);
+  console.log(`   evidencia: ${v.evidenceHash}`);
+  if (r.stage === "verify") fail(`el trabajo no pasa la verificación (${r.reason})`);
+  console.log("   veredicto: PAGAR\n");
+
+  console.log("2. revisando el bounty on-chain\n");
+  if (r.bounty) {
+    console.log(`   escrow     : ${r.escrow}`);
+    console.log(`   bounty     : #${bountyId} · ${r.status} · ${formatEther(r.bounty.amount)} ETH`);
+    console.log(`   verificador: ${r.bounty.verifier}`);
+    console.log(`   reparto    : ${formatEther(r.payout)} ETH al desarrollador, ${formatEther(r.fee)} ETH de comisión`);
+    console.log(`   destino    : ${developer}\n`);
+  }
+  if (r.stage === "bounty") fail(r.reason);
+
+  console.log("3. simulando la liquidación\n");
+  if (r.stage === "simulate") fail(`la cadena rechaza la transacción: ${r.reason}`);
+  console.log("   la cadena acepta la transacción\n");
+
+  if (r.stage === "dry-run") {
+    console.log("ensayo, no se firmó nada. Repite con --send para liquidar de verdad.");
+    process.exit(0);
+  }
+
+  console.log(`4. liquidado en el bloque ${r.block} (gas ${r.gasUsed})\n`);
+  console.log(`   pagado al desarrollador: ${formatEther(r.event.paidToDeveloper)} ETH`);
+  console.log(`   comisión de protocolo  : ${formatEther(r.event.protocolFee)} ETH`);
+  console.log(`   evidencia on-chain     : ${r.event.evidenceHash}`);
+  console.log(`   coincide con el paso 1 : ${r.hashMatches ? "sí" : "NO"}`);
+  console.log(`\n${r.url}`);
+}

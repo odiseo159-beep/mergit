@@ -18,7 +18,26 @@ node post-bounty.mjs --uri "github.com/owner/repo/issues/1" --amount 0.0005 --se
 ```
 
 `chain.mjs` holds the chain definition, the escrow ABI and the shared helpers.
-`verify.mjs` is both a CLI and a library: `settle.mjs` imports its verdict.
+`verify.mjs` and `settle.mjs` are both CLIs and libraries.
+
+## Paid on merge: `on-event.mjs`
+
+Runs inside GitHub Actions in the repository that posts bounties, so a merge pays
+without anyone typing a command. It reacts to two events, in whichever order they
+arrive: a push to the default branch (something was merged) and a completed `CI`
+workflow (tests finished). Each run re-verifies from scratch and lets `verify.mjs`
+decide. If the pull request is not merged yet or its CI is still running, it exits
+quietly and the next event tries again. If the bounty is already settled, it exits
+quietly too.
+
+- **Which bounty:** a line `Bounty: #N` in the pull request description.
+- **Who gets paid:** the author's wallet as registered in `mergit.json` on the
+  default branch. The agent does not pick the recipient.
+- **When:** only when `MERGIT_AGENT_KEY` is set as a repository secret. Without it,
+  every run is a dry run that reports what it would pay.
+
+On payment it comments on the pull request with the amount, the evidence hash and
+the transaction. See `odiseo159-beep/mergit-demo` for a working setup.
 
 `GITHUB_TOKEN` is optional: without it the agent reads public repositories at
 60 requests per hour. `MERGIT_ESCROW` overrides the contract address, which

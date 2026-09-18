@@ -72,7 +72,7 @@ async function readCi(owner, repo, sha) {
   const all = [...checks, ...statuses];
   const pending = checks.filter((c) => c.status !== "completed");
   if (pending.length > 0) {
-    return { green: false, reason: `todavía corriendo: ${pending.map((c) => c.name).join(", ")}`, checks: all };
+    return { green: false, pending: true, reason: `todavía corriendo: ${pending.map((c) => c.name).join(", ")}`, checks: all };
   }
 
   const failed = all.filter((c) => !PASSING.has(c.conclusion));
@@ -122,6 +122,7 @@ export async function verifyPullRequest({ owner, repo, number }) {
     reasons,
     merged: Boolean(pr.merged),
     ciGreen: ci.green,
+    ciPending: ci.pending === true,
     ciReason: ci.reason,
     evidence,
     evidenceHash: keccak256(toHex(canonical(evidence))),
