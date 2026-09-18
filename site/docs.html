@@ -209,7 +209,8 @@
     <h3>Why the split matters</h3>
     <p>The agent is the complicated, fallible, upgradeable part. The contract is the simple,
       immutable part. Keeping intelligence off-chain and custody on-chain means a bug in the agent
-      can misjudge a bounty, but <strong>cannot drain the escrow, pay itself, or alter an amount</strong>.
+      can misjudge a bounty, and at worst misdirect that one bounty's payout, but <strong>cannot drain
+      the escrow, touch other bounties, or alter an amount</strong>.
       That boundary is the whole security argument.</p>
   </div>
 </section>
@@ -297,7 +298,9 @@
       <li><b>No owner, no pause, no upgradeability.</b> There is no admin function. Nobody — including
         the author — can move funds held for someone else.</li>
       <li><b>The verifier's power is bounded to one choice.</b> It selects the recipient. It cannot
-        redirect funds to itself, change the amount, settle twice, or settle after the deadline.</li>
+        change the amount, settle twice, settle after the deadline, or touch a bounty it was not
+        assigned. The contract does not stop it from naming an address it controls: that choice is
+        the trust the next phase removes.</li>
       <li><b>The fee is immutable</b>, set in the constructor and hard-capped at 5%
         (<code>MAX_FEE_BPS</code>) in code, so it cannot be raised on existing escrows.</li>
       <li><b>Funds are always claimable.</b> Every bounty terminates in either a payout or a refund;

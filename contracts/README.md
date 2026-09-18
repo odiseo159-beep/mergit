@@ -36,8 +36,9 @@ The contract is deliberately **trust-minimised** — this is the core of Mergit'
 
 - **No owner, no pause, no upgradeability.** Nobody, including the author, can touch funds
   held for someone else.
-- **The verifier's power is bounded.** It can only choose *who* gets paid — never redirect
-  funds to itself, change the amount, or settle after the deadline.
+- **The verifier's power is bounded to one choice: the recipient.** It cannot change the amount,
+  settle twice, settle after the deadline, or touch a bounty it was not assigned. It can, however,
+  name any non-zero address, including one it controls: that choice is the part still trusted today.
 - **The fee is immutable** and hard-capped at 5% in code (`MAX_FEE_BPS`).
 - **Evidence is auditable.** Every payout emits the hash of what the agent evaluated.
 - Checks-effects-interactions ordering plus a reentrancy guard on both value-moving paths.

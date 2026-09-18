@@ -60,5 +60,8 @@ the bounty exists and is still `Open`, its deadline has not passed, and this
 agent is the bounty's designated verifier. It then simulates the call against
 the chain and only signs afterwards, and only when `--send` is present.
 
-The verifier can choose who gets paid. By the contract's design it can never
-redirect the funds, change the amount, or pay itself.
+The verifier chooses who gets paid, and that is its only power. It cannot
+change the amount, settle twice, settle after the deadline, or touch any other
+bounty. Nothing in the contract stops it from naming an address it controls, so
+that one choice is trusted today; binding the payout to the pull request
+author's registered wallet is what removes it.

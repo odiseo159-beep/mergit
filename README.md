@@ -46,9 +46,12 @@ how to run the tests.
 ## Design principle
 
 The escrow is deliberately **trust-minimised**: no owner, no pause, no upgradeability, an immutable
-fee hard-capped in code. The verifier agent can only choose *who* gets paid — never redirect funds
-to itself, change the amount, or settle past the deadline. A funding protocol that asks people to
-trust its operator has not solved the problem it claims to solve.
+fee hard-capped in code. The verifier agent holds exactly one permission: naming the recipient of a
+bounty it was assigned. It cannot change the amount, settle twice, settle past the deadline, or touch
+any other bounty. Naming the recipient is the one thing still trusted today, and nothing in the contract
+stops a verifier from naming an address it controls; binding the payout to the pull request author's
+registered wallet and adding a challenge window are what remove that trust next. A funding protocol
+that asks people to trust its operator has not solved the problem it claims to solve.
 
 ## Roadmap
 
