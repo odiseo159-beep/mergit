@@ -20,3 +20,9 @@ CLAUDE.md
 
 # materiales de la aplicación: se entregan por el formulario, no por el repo
 pitch-deck/
+
+# fotos de referencia de terceros: material de estudio, no se redistribuye
+brand/refs/
+
+# notas internas y confidenciales (plan de la demo, correos de GIWA, calendario)
+notas/
