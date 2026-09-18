@@ -234,9 +234,9 @@
 <body>
 
 <div class="banner">
-  The demo below is <b>simulated</b> — but the escrow contract is <b>live and verified on GIWA Sepolia</b>
-  <a href="https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879"
-     target="_blank" rel="noopener" class="bannerlink">view contract →</a>
+  The walkthrough below is <b>simulated</b>. The agent is not: it verified a <b>real merged pull request</b> and released the payment on GIWA Sepolia
+  <a href="https://sepolia-explorer.giwa.io/tx/0x09e7522eca66b87abfc17e8fb159615c08105e77f678a9c2f8f6491c53d553a4"
+     target="_blank" rel="noopener" class="bannerlink">view the settlement →</a>
 </div>
 
 <nav>
@@ -554,17 +554,25 @@
       </div>
     </div>
     <div class="disclaimer">
-      <b>About this page.</b> Mergit is an early-stage project submitted to the GASOK program.
-      The <b>interactive demo is simulated</b>: the repository, pull request, test results and wallet
+      <b>About this page.</b> Mergit is an early-stage project in Phase 3 of the GASOK program.
+      The <b>walkthrough above is simulated</b>: the repository, pull request, test results and wallet
       addresses shown in it are illustrative examples, and pressing the button queries no live chain.
-      The <b>escrow contract is real</b> — MergitEscrow is deployed and source-verified on GIWA Sepolia
-      (chain 91342), and one complete bounty lifecycle has been executed on-chain, with the payout and
-      its evidence hash recorded in the
-      <a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7"
+      <b>Everything it illustrates has since been done for real.</b> The verification agent reads a
+      pull request through the GitHub API, checks that it is merged and that the CI for its head
+      commit is green, hashes the evidence and settles the escrow. On 8 September it did exactly that
+      against <a href="https://github.com/odiseo159-beep/mergit-demo/pull/1" target="_blank"
+      rel="noopener">a real merged pull request</a> in a public repository with real tests, and
+      released the payment in the
+      <a href="https://sepolia-explorer.giwa.io/tx/0x09e7522eca66b87abfc17e8fb159615c08105e77f678a9c2f8f6491c53d553a4"
          target="_blank" rel="noopener" style="color:var(--green)">settlement transaction</a>.
-      That demo ran as a single-operator test: the funder, verifier and fee recipient were the same
-      address, with the developer as a separate party. Independent funders and agents, the GitHub App
-      integration and the production verification agent are the Phase 2 deliverable of GASOK.
+      The evidence hash recorded on-chain is recomputable from that pull request by anyone.
+      An <a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7"
+      target="_blank" rel="noopener">earlier settlement</a> in July exercised the contract with an
+      illustrative evidence string, before the agent existed.
+      Two limits still stand: these runs are single-operator, with the funder, verifier and fee
+      recipient sharing one address and the developer as a separate party; and the merge does not yet
+      trigger the agent on its own. Independent funders, and the webhook that closes that gap, are
+      what Phase 3 adds.
     </div>
   </div>
 </footer>

@@ -384,7 +384,7 @@
       <table>
         <tr><th style="width:26%">Phase</th><th style="width:16%">Status</th><th>Deliverable</th></tr>
         <tr><td><b>1 · Screening</b></td><td><span style="color:var(--green)">done</span></td><td>Escrow deployed and verified on GIWA Sepolia; lifecycle settled on-chain; product walkthrough live</td></tr>
-        <tr><td><b>2 · Testnet MVP</b></td><td>next</td><td>GitHub App, verification agent v1 against real repositories, challenge window, bounty board</td></tr>
+        <tr><td><b>2 · Testnet MVP</b></td><td>in progress</td><td>Verification agent v1 running against real repositories <span style="color:var(--green)">done</span>; webhook so the merge triggers it, challenge window, bounty board</td></tr>
         <tr><td><b>3 · Mainnet</b></td><td>planned</td><td>Stablecoin payouts, first partner protocols posting live bounties, fee switch on</td></tr>
         <tr><td><b>Demoday · KBW</b></td><td>scheduled</td><td>Merge a pull request on stage; payment lands in seconds</td></tr>
         <tr><td><b>Beyond</b></td><td>—</td><td>Automated retroactive funding pools; builder reputation graph derived from verified work</td></tr>
@@ -409,8 +409,11 @@
         <tr><td>Contract deployed and verified</td><td><a href="https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879" target="_blank" rel="noopener">sepolia-explorer.giwa.io/address/0xffcf20…5879</a></td></tr>
         <tr><td>Bounty funded on-chain</td><td><a href="https://sepolia-explorer.giwa.io/tx/0x356a876c4be477158e0916a0b16f6b6d3075d9703a8cd2bf377c5dbeb9f3e44d" target="_blank" rel="noopener">postBounty transaction</a></td></tr>
         <tr><td>Developer paid, evidence logged</td><td><a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7" target="_blank" rel="noopener">settle transaction</a></td></tr>
+        <tr><td>Agent verified a real pull request</td><td><a href="https://github.com/odiseo159-beep/mergit-demo/pull/1" target="_blank" rel="noopener">mergit-demo#1</a> — merged, CI green, in a public repository with real tests</td></tr>
+        <tr><td>That merge released a payment</td><td><a href="https://sepolia-explorer.giwa.io/tx/0x09e7522eca66b87abfc17e8fb159615c08105e77f678a9c2f8f6491c53d553a4" target="_blank" rel="noopener">settle transaction, 8 September</a> — evidence hash recomputable from the pull request</td></tr>
         <tr><td>Source, tests and scripts</td><td><a href="https://github.com/odiseo159-beep/mergit" target="_blank" rel="noopener">github.com/odiseo159-beep/mergit</a></td></tr>
-        <tr><td>Product walkthrough</td><td><a href="/">mergit-nine.vercel.app</a> — the interactive demo there is simulated and labelled as such</td></tr>
+        <tr><td>Agent source</td><td><a href="https://github.com/odiseo159-beep/mergit/tree/main/agent" target="_blank" rel="noopener">mergit/agent</a> — what counts as verified, and what it refuses to pay</td></tr>
+        <tr><td>Product walkthrough</td><td><a href="/">mergit-nine.vercel.app</a> — the walkthrough there is simulated and labelled as such; the agent behind it is not</td></tr>
       </table>
     </div>
   </div>
