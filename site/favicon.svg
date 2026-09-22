@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Mergit · la M es un grafo: dos commits se unen en un merge rojo del que sale la I -->
+  <rect width="100" height="100" fill="#0a0a0b"/>
+  <path d="M18 70 V26 L50 56 L82 26 V70" fill="none" stroke="#ededf0" stroke-width="12"
+        stroke-linecap="square" stroke-linejoin="round"/>
+  <line x1="50" y1="56" x2="50" y2="88" stroke="#ff2d2d" stroke-width="12"/>
+  <circle cx="18" cy="26" r="8.5" fill="#ededf0"/>
+  <circle cx="82" cy="26" r="8.5" fill="#ededf0"/>
+  <circle cx="50" cy="56" r="12" fill="#ff2d2d"/>
+</svg>

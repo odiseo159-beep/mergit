@@ -3,726 +3,823 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mergit — Ship code. Get paid. Instantly.</title>
-<meta name="description" content="A trustless bounty protocol on GIWA. An AI agent verifies real developer work and releases escrowed payment instantly.">
+<title>Mergit — Merge it. Get paid.</title>
+<meta name="description" content="Developer bounties locked on GIWA Chain. An agent verifies that the pull request is merged and its tests pass, then the escrow pays. On September 19 a merge paid its developer 20 seconds later.">
+<link rel="canonical" href="https://www.mergit.xyz/">
+<meta property="og:site_name" content="Mergit">
+<meta property="og:title" content="Mergit — Merge it. Get paid.">
+<meta property="og:description" content="Developer bounties locked on GIWA Chain, released by an agent that verifies the merged pull request and its CI.">
+<meta property="og:url" content="https://www.mergit.xyz">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://www.mergit.xyz/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Mergit. Merge it. Get paid. Developer bounties paid on merge.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@MergitonGIWA">
+<meta name="twitter:title" content="Mergit — Merge it. Get paid.">
+<meta name="twitter:description" content="Developer bounties locked on GIWA Chain and released by an agent that checks the merged pull request and its tests.">
+<meta name="twitter:image" content="https://www.mergit.xyz/og.jpg">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
-  :root{
-    --bg:#0a0a0b; --panel:#131316; --panel2:#18181c; --line:#26262c; --line2:#33333a;
-    --red:#ff2d2d; --red-d:#b31f1f; --text:#ededf0; --muted:#8a8a93; --faint:#5b5b64;
-    --green:#3ddc84; --amber:#ffb020;
-    --mono:"Cascadia Code",ui-monospace,SFMono-Regular,Consolas,monospace;
-    --sans:"Inter",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  }
-  html{ scroll-behavior:smooth; overflow-x:hidden; }
-  body{ background:var(--bg); color:var(--text); font-family:var(--sans);
-        -webkit-font-smoothing:antialiased; line-height:1.5; overflow-x:hidden; }
-  .wrap{ width:100%; max-width:1140px; margin:0 auto; padding:0 24px; }
-  a{ color:inherit; }
+/* ────────────────────────────────────────────────────────────
+   Mergit · una página, tres voces.
+   Hero cinematográfico, la corrida real en una terminal, y el
+   roadmap sobre papel. Misma marca en las tres.
+   Todo dato de cadena sale de media/live.js (explorador de GIWA).
+   ──────────────────────────────────────────────────────────── */
+:root{
+  --bg:#0a0a0b; --ink:#ededf0; --mute:#8a8a93; --dim:#55555d; --line:#26262c; --red:#ff2d2d;
+  --paper:#eeebe4; --paper-line:#d3cfc5; --paper-mute:#6d6b66;
+  --sans:"Geist",system-ui,-apple-system,sans-serif; --mono:"Geist Mono",ui-monospace,SFMono-Regular,monospace;
+  --pad:clamp(20px,4vw,72px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--red);color:#0a0a0b}
 
-  /* ── concept banner ── */
-  .banner{ background:var(--red); color:#fff; text-align:center; padding:9px 16px;
-           font-size:13px; font-weight:600; letter-spacing:.02em; position:relative; z-index:60; }
-  .banner b{ font-weight:800; }
-  .bannerlink{ color:#fff; text-decoration:underline; text-underline-offset:2px; margin-left:8px; font-weight:800; }
+/* ── navegación ─────────────────────────────── */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
+  padding:18px var(--pad);font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  transition:background .4s,border-color .4s,backdrop-filter .4s;border-bottom:1px solid transparent}
+.nav.stuck{background:rgba(10,10,11,.82);backdrop-filter:blur(12px);border-bottom-color:var(--line)}
+.nav.onpaper{color:#0a0a0b}
+.nav.onpaper.stuck{background:rgba(238,235,228,.85);border-bottom-color:var(--paper-line)}
+.nav.onpaper .brand svg .w{stroke:#0a0a0b;fill:#0a0a0b}
+.brand{display:flex;align-items:center;gap:10px;letter-spacing:.2em;font-weight:500}
+.brand svg{width:22px;height:22px;flex:none}
+.nav ul{display:flex;gap:clamp(14px,2.4vw,32px);list-style:none;color:var(--mute)}
+.nav.onpaper ul{color:var(--paper-mute)}
+.nav a:hover{color:var(--red)}
+.nav .ghost{border:1px solid var(--line);padding:9px 14px;color:inherit}
+.nav .ghost:hover{border-color:var(--red)}
 
-  /* on-chain proof strip */
-  .onchain{ background:#0c1a12; border:1px solid #1d4a30; border-radius:14px;
-            padding:24px 26px; margin-top:26px; display:flex; gap:26px;
-            align-items:center; justify-content:space-between; flex-wrap:wrap; }
-  .onchain .oc-l{ display:flex; align-items:flex-start; gap:16px; min-width:280px; flex:1; }
-  .oc-badge{ width:42px; height:42px; border-radius:10px; background:var(--green); color:#06110a;
-             display:flex; align-items:center; justify-content:center; font-size:21px; font-weight:800; flex-shrink:0; }
-  .oc-t{ font-size:17px; font-weight:700; }
-  .oc-s{ font-size:14px; color:var(--muted); margin-top:5px; line-height:1.5; }
-  .oc-links{ display:flex; gap:10px; flex-wrap:wrap; }
-  .oc-links a{ font-family:var(--mono); font-size:12.5px; letter-spacing:.04em; text-decoration:none;
-               border:1px solid #1d4a30; color:var(--green); border-radius:8px; padding:9px 14px; }
-  .oc-links a:hover{ background:#0f2418; }
+/* ── utilidades ─────────────────────────────── */
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:12px}
+.kicker::before{content:"";width:26px;height:1px;background:var(--red)}
+h2{font-weight:800;font-size:clamp(34px,4.6vw,66px);line-height:1;letter-spacing:-.04em;margin-top:22px;max-width:16ch}
+h2 .r{color:var(--red)}
+.lede{margin-top:20px;max-width:58ch;color:var(--mute);font-size:clamp(15px,1.25vw,18px);line-height:1.6}
+.lede b{color:var(--ink);font-weight:500}
+section{padding:clamp(70px,10vh,130px) var(--pad);position:relative}
+.rise{opacity:0;transform:translateY(24px);transition:opacity .9s cubic-bezier(.2,.8,.2,1),transform .9s cubic-bezier(.2,.8,.2,1)}
+.rise.in{opacity:1;transform:none}
+.btn{display:inline-block;font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;padding:15px 22px;
+  border:1px solid var(--line);transition:.25s}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--red);border-color:var(--red);color:#0a0a0b;font-weight:500}
+.btn.primary:hover{background:#ff4a4a;border-color:#ff4a4a}
 
-  /* ── nav ── */
-  nav{ position:sticky; top:0; z-index:50; background:rgba(10,10,11,.86);
-       backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }
-  .navin{ display:flex; align-items:center; justify-content:space-between; height:64px; }
-  .brand{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:-.02em; }
-  .brand .r{ color:var(--red); }
-  .navlinks{ display:flex; gap:28px; font-size:14px; color:var(--muted); }
-  .navlinks a{ text-decoration:none; }
-  .navlinks a:hover{ color:var(--text); }
-  .btn{ display:inline-flex; align-items:center; gap:8px; background:var(--red); color:#fff;
-        border:none; border-radius:8px; padding:11px 20px; font-size:14.5px; font-weight:650;
-        font-family:inherit; cursor:pointer; text-decoration:none; transition:background .15s; }
-  .btn:hover{ background:#e01f1f; }
-  .btn.ghost{ background:transparent; border:1px solid var(--line2); color:var(--text); }
-  .btn.ghost:hover{ background:var(--panel2); }
-  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+/* ── hero ───────────────────────────────────── */
+.hero{height:100svh;min-height:640px;padding:0;overflow:hidden;isolation:isolate;display:grid;place-items:center}
+.hero video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-3;opacity:0;transform:scale(1.08);
+  animation:video-in 3.4s cubic-bezier(.2,.7,.1,1) .2s forwards}
+@keyframes video-in{to{opacity:.72;transform:scale(1)}}
+.hero::before{content:"";position:absolute;inset:0;z-index:-2;background:
+  radial-gradient(ellipse 60% 70% at 50% 42%, transparent 0 28%, rgba(10,10,11,.6) 62%, #0a0a0b 100%),
+  linear-gradient(180deg, rgba(10,10,11,.9) 0, transparent 24%, transparent 58%, #0a0a0b 100%)}
+.grain{position:absolute;inset:-50%;z-index:-1;pointer-events:none;opacity:.08;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain 1.1s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-3%)}60%{transform:translate(-2%,-1%)}80%{transform:translate(3%,3%)}100%{transform:translate(0,0)}}
+.hero .in-center{text-align:center;padding:0 20px;max-width:900px}
+.mark{width:clamp(84px,9vw,126px);height:auto;overflow:visible;margin:0 auto 30px;display:block}
+.mark .branch{fill:none;stroke:var(--ink);stroke-width:12;stroke-linecap:square;stroke-linejoin:round;stroke-dasharray:200;stroke-dashoffset:200;animation:draw 1.3s cubic-bezier(.6,0,.2,1) .8s forwards}
+.mark .stem{stroke:var(--red);stroke-width:12;stroke-dasharray:40;stroke-dashoffset:40;animation:draw .6s cubic-bezier(.6,0,.2,1) 2.25s forwards}
+.mark .node{fill:var(--ink);transform-box:fill-box;transform-origin:center;transform:scale(0);animation:pop .5s cubic-bezier(.3,1.6,.5,1) forwards}
+.mark .n1{animation-delay:.6s}.mark .n2{animation-delay:.7s}
+.mark .merge{fill:var(--red);transform-box:fill-box;transform-origin:center;transform:scale(0);animation:pop .6s cubic-bezier(.3,1.7,.5,1) 1.95s forwards, glow 3.6s ease-in-out 3s infinite}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pop{to{transform:scale(1)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 rgba(255,45,45,0))}50%{filter:drop-shadow(0 0 14px rgba(255,45,45,.85))}}
+h1{font-weight:900;font-size:clamp(58px,12.5vw,196px);line-height:.82;letter-spacing:-.055em;display:flex;justify-content:center;overflow:hidden;padding-bottom:.04em}
+h1 span{display:inline-block;transform:translateY(105%);animation:h1rise 1.1s cubic-bezier(.2,.8,.1,1) forwards}
+h1 .r{color:var(--red)}
+@keyframes h1rise{to{transform:none}}
+.hero .tag,.hero .sub{text-shadow:0 1px 18px rgba(10,10,11,.95),0 0 3px rgba(10,10,11,.9)}
+.hero .tag{margin-top:24px;font-size:clamp(17px,1.9vw,24px);opacity:0;animation:fade 1.2s ease 2.8s forwards}
+.hero .tag b{font-weight:700}
+.hero .sub{margin:14px auto 0;max-width:560px;color:#b4b4bc;font-size:clamp(14px,1.2vw,16px);line-height:1.55;opacity:0;animation:fade 1.2s ease 3.05s forwards}
+.hero .cta{margin-top:32px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;opacity:0;animation:fade 1s ease 3.3s forwards}
+@keyframes fade{to{opacity:1}}
 
-  /* ── hero ── */
-  header{ padding:96px 0 84px; position:relative; overflow:hidden; }
-  .heroglow{ position:absolute; top:-280px; left:50%; transform:translateX(-50%);
-             width:900px; height:600px; background:radial-gradient(ellipse,rgba(255,45,45,.13),transparent 62%);
-             pointer-events:none; }
-  .eyebrow{ display:inline-flex; align-items:center; gap:9px; font-family:var(--mono); font-size:12.5px;
-            letter-spacing:.14em; color:var(--red); border:1px solid var(--red-d); border-radius:999px;
-            padding:7px 15px; margin-bottom:26px; text-transform:uppercase; }
-  h1{ font-size:clamp(42px,7vw,76px); font-weight:850; letter-spacing:-.035em; line-height:1.02; }
-  h1 .dim{ color:var(--muted); }
-  .lede{ font-size:clamp(17px,2.2vw,21px); color:var(--muted); max-width:660px; margin-top:24px; line-height:1.55; }
-  .lede b{ color:var(--text); font-weight:600; }
-  .herobtns{ display:flex; gap:13px; margin-top:38px; flex-wrap:wrap; }
-  .metarow{ display:flex; gap:30px; margin-top:52px; flex-wrap:wrap;
-            font-family:var(--mono); font-size:12.5px; color:var(--faint); letter-spacing:.06em; }
-  .metarow span b{ color:var(--muted); font-weight:400; }
+/* cinta de pagos reales */
+.ticker{position:absolute;left:0;right:0;bottom:0;border-top:1px solid rgba(38,38,44,.85);background:rgba(10,10,11,.6);
+  backdrop-filter:blur(8px);font-family:var(--mono);font-size:12px;color:var(--mute);display:flex;opacity:0;animation:fade 1s ease 3.6s forwards}
+.ticker .lbl{display:flex;align-items:center;gap:10px;padding:14px clamp(14px,3vw,26px);border-right:1px solid var(--line);
+  color:var(--ink);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.dot.on{background:var(--red);animation:ping 1.8s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(255,45,45,.6)}100%{box-shadow:0 0 0 10px rgba(255,45,45,0)}}
+.track{overflow:hidden;flex:1;min-width:0;mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.rail{display:flex;gap:52px;padding:14px 0;white-space:nowrap;width:max-content;animation:slide 44s linear infinite}
+.rail:hover{animation-play-state:paused}
+@keyframes slide{to{transform:translateX(-50%)}}
+.rail em{font-style:normal;color:var(--ink)}
+.rail .hot{color:var(--red)}
+.rail a:hover{color:var(--ink)}
+.scrollcue{position:absolute;left:50%;bottom:74px;transform:translateX(-50%);width:1px;height:46px;background:linear-gradient(var(--red),transparent);opacity:0;animation:fade 1s ease 3.9s forwards}
 
-  /* ── sections ── */
-  section{ padding:84px 0; border-top:1px solid var(--line); }
-  .kick{ font-family:var(--mono); font-size:12.5px; letter-spacing:.2em; color:var(--red);
-         text-transform:uppercase; margin-bottom:15px; }
-  h2{ font-size:clamp(28px,4vw,42px); font-weight:750; letter-spacing:-.025em; line-height:1.12; }
-  .sectsub{ font-size:17px; color:var(--muted); margin-top:14px; max-width:680px; line-height:1.6; }
+/* ── 01 problema ────────────────────────────── */
+.cols{margin-top:58px;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.cols>div{background:var(--bg);padding:30px 26px 34px}
+.cols .t{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--red)}
+.cols h3{margin-top:18px;font-size:clamp(20px,1.9vw,26px);font-weight:700;letter-spacing:-.02em}
+.cols p{margin-top:12px;color:var(--mute);font-size:14.5px;line-height:1.6}
+.prec{margin-top:34px;border-top:1px solid var(--line);font-family:var(--mono);font-size:13px}
+.prec div{display:grid;grid-template-columns:minmax(150px,1fr) minmax(180px,1.2fr) minmax(180px,1.2fr);gap:20px;padding:18px 0;border-bottom:1px solid var(--line);color:var(--mute)}
+.prec div b{color:var(--ink);font-weight:500}
+.prec .head{color:var(--dim);font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:12px 0}
 
-  .cards{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:44px; }
-  .card{ background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:28px 26px; }
-  .card .tag{ font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; color:var(--red); margin-bottom:13px; }
-  .card h3{ font-size:19px; font-weight:650; margin-bottom:10px; }
-  .card p{ font-size:14.5px; color:var(--muted); line-height:1.6; }
+/* ── 02 la corrida real ─────────────────────── */
+.run{background:linear-gradient(180deg,#0a0a0b,#0c0c0e 40%,#0a0a0b)}
+.run::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(237,237,240,.06) 1px,transparent 1px);background-size:24px 24px;
+  mask-image:radial-gradient(ellipse 70% 60% at 65% 45%,#000 10%,transparent 75%)}
+.rungrid{position:relative;display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:clamp(28px,4vw,64px);align-items:center}
+.facts{margin-top:36px;display:grid;grid-template-columns:repeat(3,auto);border-top:1px solid var(--line);max-width:520px}
+.facts div{padding:18px 18px 0 0}
+.facts div+div{padding-left:18px;border-left:1px solid var(--line)}
+.facts strong{display:block;font-family:var(--mono);font-weight:500;font-size:clamp(20px,2.1vw,30px);letter-spacing:-.02em}
+.facts span{display:block;margin-top:6px;font-size:12px;color:var(--mute);line-height:1.45}
+.term{border:1px solid var(--line);background:linear-gradient(180deg,#0f0f11,#0b0b0c);box-shadow:0 40px 120px -40px rgba(0,0,0,.9)}
+.term.flash{animation:flash 1.4s ease}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(255,45,45,0)}15%{box-shadow:0 0 90px 4px rgba(255,45,45,.35)}100%{box-shadow:0 40px 120px -40px rgba(0,0,0,.9)}}
+.term .bar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.term .bar i{width:9px;height:9px;border-radius:50%;background:#2a2a30;display:inline-block}
+.term .bar .title{flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.term .bar .rec{color:var(--red);display:flex;align-items:center;gap:6px}
+.term .bar .rec::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--red);animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.2}}
+.clock{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:18px 20px 14px;border-bottom:1px dashed var(--line)}
+.clock .t{font-family:var(--mono);font-weight:300;font-size:clamp(40px,5vw,78px);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;color:var(--dim);transition:color .3s}
+.clock .t.run{color:var(--ink)} .clock .t.done{color:var(--red)}
+.clock .t small{font-size:.38em;margin-left:6px;color:var(--mute)}
+.clock .k{font-family:var(--mono);font-size:11px;color:var(--mute);text-align:right;line-height:1.6;letter-spacing:.06em;text-transform:uppercase}
+.clock .k b{color:var(--ink);font-weight:500}
+.log{font-family:var(--mono);font-size:clamp(11px,.88vw,13px);line-height:1.75;padding:14px 20px 18px;height:clamp(300px,40vh,400px);
+  overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;mask-image:linear-gradient(180deg,transparent 0,#000 12%)}
+.log .ln{display:grid;grid-template-columns:76px 1fr;gap:10px;opacity:0;transform:translateY(4px);animation:lnin .35s ease forwards}
+@keyframes lnin{to{opacity:1;transform:none}}
+.log .ts{color:var(--dim)} .log .ts.real{color:var(--mute)}
+.log .ok::before{content:"✓ ";color:var(--red)}
+.log .m{color:var(--mute)} .log .h{color:var(--red)}
+.log .paid{color:#0a0a0b;background:var(--red);padding:0 6px;font-weight:700}
+.log a{border-bottom:1px dotted var(--dim)} .log a:hover{color:var(--ink)}
+.caret{display:inline-block;width:8px;height:1.05em;background:var(--ink);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+.term .foot{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--mute);flex-wrap:wrap}
+.term .foot button{font:inherit;color:var(--ink);background:none;border:1px solid var(--line);padding:7px 12px;cursor:pointer;transition:.2s}
+.term .foot button:hover{border-color:var(--red);color:var(--red)}
 
-  /* ── steps ── */
-  .steps{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:44px; }
-  .step{ background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:24px 22px; position:relative; }
-  .step .n{ font-family:var(--mono); font-size:11.5px; color:var(--red); letter-spacing:.14em; margin-bottom:11px; }
-  .step h3{ font-size:17px; font-weight:650; margin-bottom:8px; }
-  .step p{ font-size:13.8px; color:var(--muted); line-height:1.55; }
+/* ── 03 reglas + pasos ──────────────────────── */
+.steps{margin-top:56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:24px;counter-reset:s}
+.step{position:relative;padding-top:26px;border-top:1px solid var(--line)}
+.step::before{counter-increment:s;content:"0" counter(s);position:absolute;top:-11px;left:0;background:var(--bg);padding-right:12px;
+  font-family:var(--mono);font-size:12px;color:var(--red);letter-spacing:.1em}
+.step h3{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.step p{margin-top:10px;color:var(--mute);font-size:14.5px;line-height:1.6}
+.rules{margin-top:52px;border:1px solid var(--line);padding:26px clamp(20px,3vw,34px)}
+.rules h3{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--red)}
+.rules ol{margin-top:20px;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px 34px;counter-reset:r}
+.rules li{position:relative;padding-left:34px;color:var(--mute);font-size:14.5px;line-height:1.55}
+.rules li::before{counter-increment:r;content:counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+.rules li b{color:var(--ink);font-weight:500}
 
-  /* ══ DEMO ══ */
-  .demosect{ background:linear-gradient(180deg,#0c0c0e,#0a0a0b); }
-  .demohead{ display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
-  .simchip{ display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11.5px;
-            letter-spacing:.1em; color:var(--amber); border:1px solid #4a3a12; background:#1a1509;
-            border-radius:999px; padding:7px 14px; text-transform:uppercase; }
-  .simdot{ width:7px; height:7px; border-radius:50%; background:var(--amber); }
+/* ── 03 · plano técnico sobre papel ─────────── */
+.blueprint{overflow:hidden}
+.blueprint::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--paper-line) 1px,transparent 1px),linear-gradient(90deg,var(--paper-line) 1px,transparent 1px);
+  background-size:96px 96px;
+  mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 85%)}
+.blueprint>*{position:relative;z-index:1}
+.blueprint .steps{counter-reset:s}
+.paper-steps .step{border-top:1px solid var(--paper-line)}
+.paper-steps .step::before{background:var(--paper)}
+.paper-steps .step p{color:#3a3935}
+.blueprint .rules{border:1px solid var(--paper-line);background:rgba(255,255,255,.28)}
+.blueprint .rules li{color:#3a3935}
+.blueprint .rules li b{color:#0a0a0b}
+.blueprint .rules li::before{color:var(--paper-mute)}
+.blueprint .rules li{padding-left:38px}
+.blueprint .rules li::after{content:"";position:absolute;left:16px;top:.42em;width:10px;height:10px;border:1px solid var(--paper-mute);opacity:.5}
+.blueprint .rules.in li::after{animation:stamp .5s cubic-bezier(.3,1.5,.4,1) forwards;animation-delay:calc(var(--i,0) * .16s + .3s)}
+@keyframes stamp{60%{transform:scale(1.35) rotate(-6deg)}100%{background:var(--red);border-color:var(--red);opacity:1;transform:none}}
 
-  .bountycard{ background:var(--panel); border:1px solid var(--line); border-radius:14px;
-               padding:24px 26px; margin-top:32px; display:flex; gap:26px;
-               align-items:center; justify-content:space-between; flex-wrap:wrap; }
-  .bmeta{ flex:1; min-width:280px; }
-  .brow{ display:flex; align-items:center; gap:11px; margin-bottom:11px; flex-wrap:wrap; }
-  .pill{ font-family:var(--mono); font-size:11px; letter-spacing:.1em; padding:5px 11px;
-         border-radius:999px; border:1px solid var(--line2); color:var(--muted); text-transform:uppercase; }
-  .pill.open{ color:var(--amber); border-color:#4a3a12; background:#1a1509; }
-  .pill.work{ color:#59a6ff; border-color:#1d3557; background:#0d1826; }
-  .pill.done{ color:var(--green); border-color:#1d4a30; background:#0c1a12; }
-  .btitle{ font-size:19px; font-weight:650; line-height:1.35; }
-  .brepo{ font-family:var(--mono); font-size:13px; color:var(--muted); margin-top:8px; }
-  .bpay{ text-align:right; }
-  .bamt{ font-size:34px; font-weight:800; letter-spacing:-.02em; }
-  .bamt span{ font-size:16px; color:var(--muted); font-weight:600; }
-  .bescrow{ font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:6px; letter-spacing:.05em; }
+.pipe{margin-top:46px}
+.pipe svg{width:100%;height:auto;overflow:visible}
+.rulerow{display:grid;grid-template-columns:repeat(4,1fr);font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--paper-mute);
+  border-top:1px solid var(--paper-line);padding-top:10px;margin-bottom:6px}
+.rulerow span:nth-child(n+2){text-align:center}
+.rulerow span:last-child{text-align:right}
+.rail-line{stroke:#0a0a0b;stroke-width:2}
+.rail-line.dash{stroke:var(--red);stroke-width:2;stroke-dasharray:6 10;opacity:0}
+.pipe.in .rail-line.dash{opacity:.55;animation:march 1.6s linear infinite}
+@keyframes march{to{stroke-dashoffset:-32}}
+.dims line{stroke:var(--paper-mute);stroke-width:1}
+.dims text{font-family:var(--mono);font-size:12px;fill:var(--paper-mute)}
+.st .box{fill:var(--paper);stroke:#0a0a0b;stroke-width:2}
+.st .fillhatch{opacity:.55}
+.st .glyph{fill:none;stroke:#0a0a0b;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.st .cap{font-family:var(--mono);font-size:13px;fill:#0a0a0b;font-weight:500}
+.st .sub{font-family:var(--mono);font-size:11px;fill:var(--paper-mute)}
+.st{opacity:0}
+.pipe.in .st{animation:stin .6s cubic-bezier(.2,.8,.2,1) forwards}
+.pipe.in .st1{animation-delay:.1s}.pipe.in .st2{animation-delay:.25s}.pipe.in .st3{animation-delay:.4s}.pipe.in .st4{animation-delay:.55s}
+@keyframes stin{to{opacity:1}}
+/* cada estación se enciende cuando el token llega */
+.pipe.in .st .box{animation:hit 8s ease-in-out infinite}
+.pipe.in .st1 .box{animation-delay:.5s}.pipe.in .st2 .box{animation-delay:1.9s}
+.pipe.in .st3 .box{animation-delay:4.2s}
+.pipe.in .st4 .box{animation:hitstay 8s ease-in-out 6.4s infinite}
+@keyframes hit{0%{stroke:var(--red);stroke-width:3.5}12%,100%{stroke:#0a0a0b;stroke-width:2}}
+@keyframes hitstay{0%,16%{stroke:var(--red);stroke-width:3}30%,100%{stroke:#0a0a0b;stroke-width:2}}
+.token{opacity:0}
+.token circle{fill:var(--red)}
+.token .halo{fill:none;stroke:var(--red);stroke-width:2;transform-box:fill-box;transform-origin:center}
+.token{transform:translate(110px,120px);pointer-events:none}
+.pipe.in .token{animation:ride 8s cubic-bezier(.65,0,.35,1) infinite}
+.pipe.in .token .halo{animation:halo 8s ease-out infinite}
+@keyframes ride{
+  0%{transform:translate(110px,120px);opacity:0}
+  6%{transform:translate(110px,120px);opacity:1}
+  24%{transform:translate(437px,120px)}
+  34%{transform:translate(437px,120px)}
+  52%{transform:translate(763px,120px)}
+  62%{transform:translate(763px,120px)}
+  80%{transform:translate(1090px,120px)}
+  94%{transform:translate(1090px,120px);opacity:1}
+  100%{transform:translate(1090px,120px);opacity:0}
+}
+@keyframes halo{0%,72%{transform:scale(1);opacity:0}78%{transform:scale(1);opacity:.9}94%,100%{transform:scale(3.6);opacity:0}}
+.payout{font-family:var(--mono);font-size:13px;fill:var(--red);font-weight:500;opacity:0}
+.pipe.in .payout{animation:payin 8s ease-in-out infinite}
+@keyframes payin{0%,76%{opacity:0}82%,94%{opacity:1}100%{opacity:0}}
+@media (max-width:760px){.pipe{display:none}}
 
-  .demogrid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
-  /* sin min-width:0 los bloques <pre> del diff ensanchan la columna y desbordan la página */
-  .demogrid > *{ min-width:0; }
-  .pane{ background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden;
-         display:flex; flex-direction:column; min-height:420px; min-width:0; }
-  .panehead{ background:var(--panel2); border-bottom:1px solid var(--line); padding:13px 20px;
-             display:flex; align-items:center; justify-content:space-between; }
-  .panetitle{ font-family:var(--mono); font-size:12px; letter-spacing:.13em; color:var(--muted); text-transform:uppercase; }
-  .dots{ display:flex; gap:7px; }
-  .dot{ width:10px; height:10px; border-radius:50%; background:#33333a; }
-  .dot.r{ background:var(--red); }
-  .panebody{ padding:20px 22px; flex:1; overflow:auto; min-width:0; }
+/* ── 04 por qué GIWA ────────────────────────── */
+.giwa .cols>div{background:#0c0c0e}
 
-  /* evidence */
-  .evrow{ display:flex; gap:13px; align-items:flex-start; padding:13px 0; border-bottom:1px solid var(--line); }
-  .evrow:last-child{ border-bottom:none; }
-  .evicon{ width:20px; height:20px; border-radius:50%; border:2px solid var(--line2); flex-shrink:0;
-           margin-top:2px; display:flex; align-items:center; justify-content:center;
-           font-size:12px; font-weight:800; color:transparent; transition:all .3s; }
-  .evrow.pass .evicon{ border-color:var(--green); background:var(--green); color:#06110a; }
-  .evrow.run .evicon{ border-color:var(--amber); border-right-color:transparent; animation:spin .7s linear infinite; }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
-  .evtxt .t{ font-size:14.5px; font-weight:600; }
-  .evtxt .d{ font-size:13px; color:var(--muted); margin-top:3px; font-family:var(--mono); line-height:1.5; }
-  .evrow{ opacity:.4; transition:opacity .3s; }
-  .evrow.run,.evrow.pass{ opacity:1; }
+/* ── 05 roadmap sobre papel ─────────────────── */
+.paper{background:var(--paper);color:#0a0a0b}
+.paper::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.4;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.paper .kicker{color:var(--paper-mute)}
+.paper .lede{color:#3a3935}
+.paper .lede b{color:#0a0a0b}
+.roadgrid{position:relative;margin-top:56px;display:grid;grid-template-columns:minmax(260px,.8fr) minmax(0,1.2fr);gap:clamp(24px,4vw,60px)}
+.roadgraph{position:relative;min-height:520px}
+.roadgraph svg{width:100%;height:100%;position:absolute;inset:0}
+.rlane{fill:none;stroke:#0a0a0b;stroke-width:4;stroke-linecap:round}
+.rlane.ghost{stroke:var(--paper-line);stroke-width:1.5;stroke-dasharray:3 7}
+.rlane.red{stroke:var(--red)}
+.rdraw{stroke-dasharray:var(--len,600);stroke-dashoffset:var(--len,600)}
+.in .rdraw{animation:draw var(--dur,1.2s) cubic-bezier(.6,0,.25,1) var(--d,0s) forwards}
+.rnode{transform-box:fill-box;transform-origin:center;transform:scale(0)}
+.in .rnode{animation:pop .5s cubic-bezier(.3,1.6,.5,1) var(--d) forwards}
+.rnode.done{fill:#0a0a0b} .rnode.now{fill:var(--red)} .rnode.next{fill:var(--paper);stroke:#0a0a0b;stroke-width:4}
+.rnode.far{fill:var(--paper);stroke:var(--paper-mute);stroke-width:3;stroke-dasharray:4 4}
+.rpulse{fill:none;stroke:var(--red);stroke-width:2;transform-box:fill-box;transform-origin:center;opacity:0}
+.in .rpulse{animation:pulse 2.6s ease-out calc(var(--d) + .4s) infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:.8}100%{transform:scale(3.4);opacity:0}}
+.rlbl{font-family:var(--mono);font-size:13px;fill:var(--paper-mute);opacity:0}
+.in .rlbl{animation:fade .6s ease var(--d) forwards}
+.rlbl .t{fill:#0a0a0b;font-weight:500} .rlbl.r .t{fill:var(--red)}
+.phases{display:flex;flex-direction:column;gap:26px}
+.phase{border-top:1px solid var(--paper-line);padding-top:20px}
+.phase .h{display:flex;align-items:baseline;gap:12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--paper-mute)}
+.phase .h b{color:#0a0a0b;font-weight:500}
+.phase .h .tagr{color:var(--red)}
+.phase h3{margin-top:12px;font-size:clamp(21px,2.2vw,30px);font-weight:800;letter-spacing:-.03em}
+.phase ul{margin-top:12px;list-style:none;display:flex;flex-direction:column;gap:7px}
+.phase li{position:relative;padding-left:20px;color:#3a3935;font-size:15px;line-height:1.5}
+.phase li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:1px;background:var(--paper-mute)}
+.phase.is-now li::before{background:var(--red)}
+.paper .note{margin-top:42px;font-family:var(--mono);font-size:12px;color:var(--paper-mute);line-height:1.7}
+.paper .note a{border-bottom:1px solid var(--paper-line)}
+.paper .note a:hover{color:#0a0a0b;border-color:#0a0a0b}
 
-  .diffbox{ background:#0d0d10; border:1px solid var(--line); border-radius:9px; margin-top:16px;
-            font-family:var(--mono); font-size:12.5px; line-height:1.7; overflow:hidden;
-            max-height:0; opacity:0; transition:max-height .5s, opacity .4s; max-width:100%; }
-  .diffbox.show{ max-height:260px; opacity:1; }
-  .diffhead{ background:#141418; padding:8px 14px; color:var(--faint); font-size:11.5px;
-             letter-spacing:.08em; border-bottom:1px solid var(--line); }
-  .diffbody{ padding:12px 14px; overflow-x:auto; }
-  .diffbody div{ white-space:pre; }
-  .dplus{ color:var(--green); } .dminus{ color:#ff6b6b; } .dctx{ color:var(--faint); }
+/* ── cierre ─────────────────────────────────── */
+.close{height:88svh;min-height:520px;display:grid;place-items:center;text-align:center;overflow:hidden;isolation:isolate;padding:0 var(--pad)}
+.close video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-3;opacity:.55}
+.close::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(ellipse 65% 60% at 50% 55%,transparent 0 20%,rgba(10,10,11,.72) 60%,#0a0a0b 100%)}
+.close h2{margin:0 auto;max-width:18ch;font-size:clamp(38px,6.4vw,92px);text-shadow:0 2px 30px rgba(10,10,11,.9)}
+.close .cta{margin-top:34px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.close .meta{margin-top:26px;font-family:var(--mono);font-size:12px;color:var(--mute);letter-spacing:.06em}
 
-  /* terminal */
-  .term{ font-family:var(--mono); font-size:13.5px; line-height:1.85; }
-  .term div{ word-break:break-word; }
-  .g{ color:var(--green); } .rd{ color:var(--red); } .mu{ color:var(--muted); }
-  .am{ color:var(--amber); } .bl{ color:#59a6ff; }
-  .cursor{ display:inline-block; width:8px; height:15px; background:var(--red);
-           vertical-align:-2px; animation:blink 1s steps(2) infinite; }
-  @keyframes blink{ 50%{ opacity:0; } }
+footer{border-top:1px solid var(--line);padding:46px var(--pad) 60px;font-size:13px;color:var(--mute)}
+.frow{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:center;font-family:var(--mono);font-size:12px;letter-spacing:.06em}
+.frow a:hover{color:var(--red)}
+footer .honest{margin-top:34px;padding-top:24px;border-top:1px solid var(--line);max-width:80ch;line-height:1.65;color:var(--dim)}
+footer .honest b{color:var(--mute);font-weight:500}
+footer .honest a{color:var(--mute);border-bottom:1px solid var(--line)}
+footer .honest a:hover{color:var(--ink)}
 
-  /* payout */
-  .payout{ margin-top:18px; background:linear-gradient(135deg,#0c1a12,#0d1410);
-           border:1px solid #1d4a30; border-radius:14px; padding:26px 28px;
-           display:none; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; }
-  .payout.show{ display:flex; animation:rise .45s ease-out; }
-  @keyframes rise{ from{ opacity:0; transform:translateY(12px); } }
-  .pleft{ display:flex; align-items:center; gap:18px; }
-  .pcheck{ width:46px; height:46px; border-radius:50%; background:var(--green); color:#06110a;
-           display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; flex-shrink:0; }
-  .ptitle{ font-size:19px; font-weight:700; }
-  .psub{ font-family:var(--mono); font-size:12.5px; color:var(--muted); margin-top:5px; }
-  .pright{ text-align:right; font-family:var(--mono); font-size:12.5px; color:var(--muted); }
-  .pright b{ display:block; font-size:24px; color:var(--green); font-family:var(--sans);
-             font-weight:800; letter-spacing:-.02em; margin-bottom:4px; }
-
-  .democtl{ display:flex; gap:12px; margin-top:22px; align-items:center; flex-wrap:wrap; }
-  .demonote{ font-size:13px; color:var(--faint); font-family:var(--mono); }
-
-  /* roadmap */
-  .rm{ margin-top:44px; }
-  .rmrow{ display:grid; grid-template-columns:190px 1fr; gap:26px; padding:22px 0; border-bottom:1px solid var(--line); }
-  .rmrow:last-child{ border-bottom:none; }
-  .rmwhen{ font-family:var(--mono); font-size:12px; letter-spacing:.13em; color:var(--red); padding-top:3px; }
-  .rmb h3{ font-size:18px; font-weight:650; margin-bottom:6px; }
-  .rmb p{ font-size:14.5px; color:var(--muted); line-height:1.6; }
-
-  /* cta + footer */
-  .ctabox{ background:var(--panel); border:1px solid var(--line); border-radius:18px;
-           padding:56px 48px; text-align:center; }
-  .ctabox h2{ margin-bottom:14px; }
-  .ctabox .sectsub{ margin:0 auto 30px; }
-  footer{ border-top:1px solid var(--line); padding:44px 0 60px; }
-  .foot{ display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap;
-         font-size:13.5px; color:var(--faint); }
-  .foot a{ color:var(--muted); text-decoration:none; }
-  .foot a:hover{ color:var(--text); }
-  .disclaimer{ margin-top:26px; padding:18px 20px; background:var(--panel); border:1px solid var(--line);
-               border-radius:11px; font-size:13px; color:var(--muted); line-height:1.65; }
-  .disclaimer b{ color:var(--text); }
-
-  @media (max-width:980px){
-    .demogrid{ grid-template-columns:1fr; }
-    .cards{ grid-template-columns:1fr; }
-    .steps{ grid-template-columns:repeat(2,1fr); }
-    .navlinks{ display:none; }
-  }
-  @media (max-width:640px){
-    .wrap{ padding:0 18px; }
-    header{ padding:60px 0 56px; }
-    section{ padding:60px 0; }
-    .steps{ grid-template-columns:1fr; }
-    .rmrow{ grid-template-columns:1fr; gap:8px; }
-    .bountycard{ flex-direction:column; align-items:flex-start; }
-    .bpay{ text-align:left; }
-    .ctabox{ padding:38px 24px; }
-    .pane{ min-height:340px; }
-    .metarow{ gap:14px; }
-  }
-  @media (prefers-reduced-motion:reduce){
-    *{ animation:none !important; transition:none !important; }
-    html{ scroll-behavior:auto; }
-  }
-  /* deep-linked states render instantly, without replaying the animation */
-  html.noanim *{ animation:none !important; transition:none !important; }
+@media (max-width:900px){
+  .rungrid,.roadgrid{grid-template-columns:1fr}
+  .roadgraph{min-height:420px}
+  .nav ul{display:none}
+  .prec div{grid-template-columns:1fr;gap:6px}
+  .prec .head{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01s!important;animation-delay:0s!important;transition-duration:.01s!important}
+}
 </style>
 </head>
 <body>
 
-<div class="banner">
-  The walkthrough below is <b>simulated</b>. The agent is not: it verified a <b>real merged pull request</b> and released the payment on GIWA Sepolia
-  <a href="https://sepolia-explorer.giwa.io/tx/0x09e7522eca66b87abfc17e8fb159615c08105e77f678a9c2f8f6491c53d553a4"
-     target="_blank" rel="noopener" class="bannerlink">view the settlement →</a>
-</div>
-
-<nav>
-  <div class="wrap navin">
-    <div class="brand">MERG<span class="r">IT</span></div>
-    <div class="navlinks">
-      <a href="#problem">Problem</a>
-      <a href="#demo">Demo</a>
-      <a href="#how">How it works</a>
-      <a href="#giwa">Why GIWA</a>
-      <a href="#roadmap">Roadmap</a>
-      <a href="/docs">Tech docs</a>
-    </div>
-    <a class="btn" href="#demo">Try the demo</a>
-  </div>
+<nav class="nav" id="nav">
+  <a class="brand" href="#top">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><path class="w" d="M18 72 V24 L50 56 L82 24 V72" fill="none" stroke="#ededf0" stroke-width="12" stroke-linecap="square" stroke-linejoin="round"/><line x1="50" y1="56" x2="50" y2="92" stroke="#ff2d2d" stroke-width="12"/><circle class="w" cx="18" cy="24" r="8.5" fill="#ededf0"/><circle class="w" cx="82" cy="24" r="8.5" fill="#ededf0"/><circle cx="50" cy="56" r="12" fill="#ff2d2d"/></svg>
+    Mergit
+  </a>
+  <ul>
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#run">The run</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#giwa">Why GIWA</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+  </ul>
+  <a class="ghost" href="/docs">Tech docs</a>
 </nav>
 
-<header>
-  <div class="heroglow"></div>
-  <div class="wrap">
-    <div class="eyebrow">GASOK 2026 · Track 04 AI / Web3</div>
-    <h1>Merge it.<br><span class="dim">Get paid.</span></h1>
-    <p class="lede">A trustless bounty protocol for <b>GIWA</b>. Protocols post bounties with on-chain escrow.
-      An <b>AI agent verifies the actual work</b> — the diff, the tests, the merge, the deployment —
-      and releases payment in seconds. No committees. No forms. No waiting.</p>
-    <div class="herobtns">
-      <a class="btn" href="#demo">▶ Run the agent</a>
-      <a class="btn ghost" href="/docs">Read the tech docs</a>
+<!-- ── hero ─────────────────────────────────────────────── -->
+<header class="hero" id="top">
+  <video src="media/hero.mp4" poster="media/hero.jpg" autoplay muted loop playsinline preload="auto"></video>
+  <div class="grain"></div>
+
+  <div class="in-center">
+    <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+      <path class="branch" d="M18 72 V24 L50 56 L82 24 V72"/>
+      <line class="stem" x1="50" y1="56" x2="50" y2="92"/>
+      <circle class="node n1" cx="18" cy="24" r="8.5"/>
+      <circle class="node n2" cx="82" cy="24" r="8.5"/>
+      <circle class="merge" cx="50" cy="56" r="12"/>
+    </svg>
+    <h1 aria-label="Mergit">
+      <span style="animation-delay:1.1s">M</span><span style="animation-delay:1.18s">E</span><span style="animation-delay:1.26s">R</span><span style="animation-delay:1.34s">G</span><span class="r" style="animation-delay:2.2s">I</span><span class="r" style="animation-delay:2.28s">T</span>
+    </h1>
+    <p class="tag"><b>Merge it.</b> Get paid.</p>
+    <p class="sub">Developer bounties locked on GIWA Chain. An agent checks that the pull request is merged and its tests pass, then the escrow pays. No committee in between.</p>
+    <div class="cta">
+      <a class="btn primary" href="#run">See the real run</a>
+      <a class="btn" href="/docs">Read the tech docs</a>
     </div>
-    <div class="metarow">
-      <span><b>Contract:</b> live on GIWA Sepolia</span>
-      <span><b>Track:</b> AI / Web3</span>
-      <span><b>Team:</b> solo founder</span>
-      <span><b>Production agent:</b> GASOK Phase 2</span>
-    </div>
+  </div>
+
+  <div class="scrollcue"></div>
+  <div class="ticker">
+    <div class="lbl"><i class="dot" id="dot"></i><span id="dotlbl">On-chain</span></div>
+    <div class="track"><div class="rail" id="rail"></div></div>
   </div>
 </header>
 
+<!-- ── 01 problema ──────────────────────────────────────── -->
 <section id="problem">
-  <div class="wrap">
-    <div class="kick">01 · The problem</div>
-    <h2>Developer funding in crypto is broken.</h2>
-    <p class="sectsub">Every ecosystem knows it needs builders. Almost none can pay them without friction —
-      and a new chain lives or dies by the builders it attracts.</p>
-    <div class="cards">
-      <div class="card">
-        <div class="tag">SLOW</div>
-        <h3>Weeks to months</h3>
-        <p>Grant rounds, review queues, multisig sign-offs. A developer who ships today gets paid next quarter — if ever.</p>
+  <div class="rise">
+    <p class="kicker">01 · The problem</p>
+    <h2>Paying builders is still a <span class="r">manual</span> process.</h2>
+    <p class="lede">Every ecosystem knows it needs developers. Almost none can pay them for shipped work without friction, and a new chain lives or dies by the builders it attracts.</p>
+  </div>
+
+  <div class="cols rise">
+    <div>
+      <p class="t">Slow</p>
+      <h3>Weeks to months</h3>
+      <p>Grant rounds, review queues, multisig sign-offs. The work ships today and the payment arrives next quarter.</p>
+    </div>
+    <div>
+      <p class="t">Manual</p>
+      <h3>Committees decide</h3>
+      <p>People read applications, not code. Review is subjective and does not scale with the ecosystem.</p>
+    </div>
+    <div>
+      <p class="t">Farmable</p>
+      <h3>Sybils drain the pool</h3>
+      <p>Identity filters fail. Fake accounts and recycled repositories capture funds meant for real builders.</p>
+    </div>
+  </div>
+
+  <div class="prec rise">
+    <div class="head"><span>Precedent</span><span>What it proved</span><span>The bottleneck</span></div>
+    <div><b>Optimism Retro Funding</b><span>100M+ OP paid to builders for work already shipped.</span><span>Badgeholders review by hand, round by round.</span></div>
+    <div><b>Gitcoin and grant programs</b><span>Tens of millions distributed. Builders show up when the money is real.</span><span>Applications, committees, and chronic sybil farming.</span></div>
+  </div>
+</section>
+
+<!-- ── 02 la corrida real ───────────────────────────────── -->
+<section id="run" class="run">
+  <div class="rungrid">
+    <div class="rise">
+      <p class="kicker">02 · The real run</p>
+      <h2>The merge <span class="r">is the invoice.</span></h2>
+      <p class="lede">Lock a bounty on-chain. When the pull request is <b>merged</b> and its <b>tests pass</b>, the agent verifies it from GitHub and the escrow pays the developer. Nobody signs off. Nobody chases a payment.</p>
+      <p class="lede">What you see here is not a mockup. It is the replay of what happened to <b>mergit-demo#2</b> on 19 September 2026, with the amounts, hashes and transaction read from GIWA Sepolia.</p>
+      <div class="facts">
+        <div><strong id="f-secs">20 s</strong><span>from merge to payment</span></div>
+        <div><strong>98.5%</strong><span>of the bounty goes to the developer</span></div>
+        <div><strong>0</strong><span>committees, forms or invoices</span></div>
       </div>
-      <div class="card">
-        <div class="tag">MANUAL</div>
-        <h3>Committees decide</h3>
-        <p>Humans read applications, not code. Evaluation is subjective, political, and doesn't scale with the ecosystem.</p>
+      <div class="cta" style="margin-top:32px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn" id="prlink" href="https://github.com/odiseo159-beep/mergit-demo/pull/2">The pull request ↗</a>
+        <a class="btn" id="txbtn" href="#">The settlement ↗</a>
       </div>
-      <div class="card">
-        <div class="tag">FARMABLE</div>
-        <h3>Sybils drain the pool</h3>
-        <p>Identity filters fail. Fake accounts and recycled repos capture funds meant for people doing real work.</p>
+    </div>
+
+    <div class="term rise" id="term" aria-label="Replay of the agent run that paid mergit-demo#2">
+      <div class="bar"><span><i></i> <i></i> <i></i></span><span class="title">mergit · pay-on-merge · odiseo159-beep/mergit-demo</span><span class="rec">replay</span></div>
+      <div class="clock">
+        <div class="t" id="clock">00.0<small>s</small></div>
+        <div class="k">since the merge<br><b>PR #2</b> · Sep 19, 2026 · UTC</div>
       </div>
+      <div class="log" id="log"></div>
+      <div class="foot"><span id="src">Real events, replayed in real time</span><button id="replay" type="button">↻ replay</button></div>
     </div>
   </div>
 </section>
 
-<!-- ══════════ DEMO ══════════ -->
-<section id="demo" class="demosect">
-  <div class="wrap">
-    <div class="demohead">
-      <div>
-        <div class="kick">02 · Interactive demo</div>
-        <h2>Watch the agent settle a bounty.</h2>
-        <p class="sectsub">This is the core loop of Mergit. Press the button and follow what the agent
-          actually checks before releasing money.</p>
-      </div>
-      <div class="simchip"><span class="simdot"></span> Simulated data</div>
+<!-- ── 03 cómo funciona · plano técnico sobre papel ──────── -->
+<section id="how" class="paper blueprint">
+  <div class="rise">
+    <p class="kicker">03 · How it works</p>
+    <h2>Judgement off-chain. <span class="r">Custody on-chain.</span></h2>
+    <p class="lede">The agent lives inside GitHub Actions and decides. The money never touches it: it waits in the contract until the two conditions hold.</p>
+  </div>
+
+  <!-- la tubería: un token rojo recorre las cuatro estaciones -->
+  <div class="pipe rise" id="pipe" aria-hidden="true">
+    <div class="rulerow"><span>01 Lock</span><span>02 Build</span><span>03 Verify</span><span>04 Pay</span></div>
+    <svg viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="8" stroke="#0a0a0b" stroke-width="1" opacity=".18"/>
+        </pattern>
+      </defs>
+
+      <!-- carril -->
+      <line class="rail-line" x1="110" y1="120" x2="1090" y2="120"/>
+      <line class="rail-line dash" x1="110" y1="120" x2="1090" y2="120"/>
+
+      <!-- cotas -->
+      <g class="dims">
+        <line x1="110" y1="252" x2="1090" y2="252"/>
+        <line x1="110" y1="244" x2="110" y2="260"/><line x1="1090" y1="244" x2="1090" y2="260"/>
+        <text x="600" y="280" text-anchor="middle">20 s, measured on 19 Sep 2026</text>
+      </g>
+
+      <!-- estación 1 · escrow -->
+      <g class="st st1" transform="translate(110 120)">
+        <rect class="box" x="-38" y="-38" width="76" height="76"/>
+        <rect class="fillhatch" x="-38" y="-38" width="76" height="76" fill="url(#hatch)"/>
+        <path class="glyph" d="M-14 2 h28 v22 h-28 z M-8 2 v-10 a8 8 0 0 1 16 0 v10"/>
+        <text class="cap" x="0" y="72" text-anchor="middle">MergitEscrow</text>
+        <text class="sub" x="0" y="94" text-anchor="middle">funder locks the bounty</text>
+      </g>
+
+      <!-- estación 2 · pull request -->
+      <g class="st st2" transform="translate(437 120)">
+        <rect class="box" x="-38" y="-38" width="76" height="76"/>
+        <path class="glyph" d="M-16 -14 v28 M16 -14 v28 M-16 -14 h10 M-16 14 h10 M16 -14 h-10 M16 14 h-10 M-4 0 h8"/>
+        <text class="cap" x="0" y="72" text-anchor="middle">Pull request</text>
+        <text class="sub" x="0" y="94" text-anchor="middle">merged by a maintainer</text>
+      </g>
+
+      <!-- estación 3 · agente -->
+      <g class="st st3" transform="translate(763 120)">
+        <rect class="box" x="-38" y="-38" width="76" height="76"/>
+        <path class="glyph" d="M-18 4 l10 10 l26 -26"/>
+        <text class="cap" x="0" y="72" text-anchor="middle">The agent</text>
+        <text class="sub" x="0" y="94" text-anchor="middle">merged? CI green on head?</text>
+      </g>
+
+      <!-- estación 4 · desarrollador -->
+      <g class="st st4" transform="translate(1090 120)">
+        <rect class="box" x="-38" y="-38" width="76" height="76"/>
+        <path class="glyph" d="M-18 -8 h36 v22 h-36 z M6 -8 v-8 h-24 v8 M8 3 h6"/>
+        <text class="cap" x="0" y="72" text-anchor="middle">Developer</text>
+        <text class="sub" x="0" y="94" text-anchor="middle">98.5% of the bounty</text>
+      </g>
+
+      <!-- el token que viaja -->
+      <g class="token"><circle r="11"/><circle class="halo" r="11"/></g>
+      <text class="payout" x="1090" y="56" text-anchor="middle">paid</text>
+    </svg>
+  </div>
+
+  <div class="steps paper-steps rise">
+    <div class="step">
+      <h3>Lock</h3>
+      <p>A protocol posts a bounty and the reward is locked in the contract on GIWA. Nobody can move it, Mergit included.</p>
     </div>
-
-    <!-- bounty -->
-    <div class="bountycard">
-      <div class="bmeta">
-        <div class="brow">
-          <span class="pill" id="bountyId">BOUNTY #42</span>
-          <span class="pill open" id="bountyState">OPEN</span>
-        </div>
-        <div class="btitle">Add a price-feed adapter to the oracle module</div>
-        <div class="brepo">repo: odiseo/giwa-oracle · issue #7 · solidity + tests required</div>
-      </div>
-      <div class="bpay">
-        <div class="bamt">500 <span>USDT</span></div>
-        <div class="bescrow" id="escrowState">◆ locked in escrow</div>
-      </div>
+    <div class="step">
+      <h3>Build</h3>
+      <p>A developer ships the work the normal way: a pull request, reviewed and merged by the maintainers.</p>
     </div>
-
-    <div class="demogrid">
-      <!-- evidence -->
-      <div class="pane">
-        <div class="panehead">
-          <div class="panetitle">Evidence the agent reads</div>
-        </div>
-        <div class="panebody">
-          <div class="evrow" id="ev1">
-            <div class="evicon">✓</div>
-            <div class="evtxt"><div class="t">Pull request opened</div>
-              <div class="d">odiseo/giwa-oracle#7 · +148 −12 · 3 files</div></div>
-          </div>
-          <div class="evrow" id="ev2">
-            <div class="evicon">✓</div>
-            <div class="evtxt"><div class="t">Diff matches the bounty spec</div>
-              <div class="d">adapter implements IPriceFeed · scope confirmed</div></div>
-          </div>
-          <div class="evrow" id="ev3">
-            <div class="evicon">✓</div>
-            <div class="evtxt"><div class="t">CI green · 34 tests passing</div>
-              <div class="d">forge test · 34 passed, 0 failed · coverage 91%</div></div>
-          </div>
-          <div class="evrow" id="ev4">
-            <div class="evicon">✓</div>
-            <div class="evtxt"><div class="t">Merged to main by a maintainer</div>
-              <div class="d">commit 9f2c1ab · not self-merged</div></div>
-          </div>
-          <div class="evrow" id="ev5">
-            <div class="evicon">✓</div>
-            <div class="evtxt"><div class="t">Contract deployed &amp; verified</div>
-              <div class="d">source verified · bytecode matches the merged commit</div></div>
-          </div>
-          <div class="evrow" id="ev6">
-            <div class="evicon">✓</div>
-            <div class="evtxt"><div class="t">No sybil signals</div>
-              <div class="d">contribution history consistent · no recycled code</div></div>
-          </div>
-
-          <div class="diffbox" id="diffbox">
-            <div class="diffhead">contracts/adapters/PriceFeedAdapter.sol</div>
-            <div class="diffbody">
-              <div class="dctx">  contract PriceFeedAdapter is IPriceFeed {</div>
-              <div class="dminus">-     uint256 public price;</div>
-              <div class="dplus">+     uint256 private _price;</div>
-              <div class="dplus">+     uint256 private _updatedAt;</div>
-              <div class="dplus">+</div>
-              <div class="dplus">+     function latestPrice() external view</div>
-              <div class="dplus">+         returns (uint256, uint256) {</div>
-              <div class="dplus">+         require(_updatedAt != 0, "no data");</div>
-              <div class="dplus">+         return (_price, _updatedAt);</div>
-              <div class="dplus">+     }</div>
-              <div class="dctx">  }</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- terminal -->
-      <div class="pane">
-        <div class="panehead">
-          <div class="panetitle">mergit agent</div>
-          <div class="dots"><span class="dot r"></span><span class="dot"></span><span class="dot"></span></div>
-        </div>
-        <div class="panebody">
-          <div class="term" id="term">
-            <div class="mu">Mergit verification agent · idle</div>
-            <div class="mu">waiting for a bounty to settle…</div>
-            <div><span class="cursor"></span></div>
-          </div>
-        </div>
-      </div>
+    <div class="step">
+      <h3>Verify</h3>
+      <p>Every merge wakes the agent. It reads the pull request through the GitHub API and hashes exactly what it saw.</p>
     </div>
-
-    <!-- payout -->
-    <div class="payout" id="payout">
-      <div class="pleft">
-        <div class="pcheck">✓</div>
-        <div>
-          <div class="ptitle">Escrow released — developer paid</div>
-          <div class="psub">to 0x7f3…a21 · settled in 4.2s · no human approval</div>
-        </div>
-      </div>
-      <div class="pright">
-        <b>500 USDT</b>
-        confidence 0.97 · fee 1.5%
-      </div>
+    <div class="step">
+      <h3>Pay</h3>
+      <p>If both conditions hold, the escrow pays the author's registered wallet and records the evidence hash on-chain.</p>
     </div>
+  </div>
 
-    <div class="democtl">
-      <button class="btn" id="runBtn">▶ Run the agent</button>
-      <button class="btn ghost" id="resetBtn">Reset</button>
-      <span class="demonote" id="note">Simulated run — the on-chain version is linked below.</span>
+  <div class="rules rise" id="rules">
+    <h3>What counts as verified · five rules, written in code</h3>
+    <ol>
+      <li style="--i:0"><b>The pull request is merged.</b> Unmerged work is not delivered work, and a maintainer accepted it, not the author.</li>
+      <li style="--i:1"><b>CI is read on the head commit</b>, where the tests for the submitted work ran. The merge commit goes into the evidence.</li>
+      <li style="--i:2"><b>No CI means no payment.</b> Missing checks are not passing checks. A verifier that approves missing evidence is a rubber stamp.</li>
+      <li style="--i:3"><b>Neutral and skipped do not block.</b> They mean "does not apply", not "failed".</li>
+      <li style="--i:4"><b>Both CI systems are read</b>: modern check runs and legacy statuses, because repositories use one, the other, or both.</li>
+    </ol>
+  </div>
+</section>
+<!-- ── 04 por qué GIWA ──────────────────────────────────── -->
+<section id="giwa" class="giwa">
+  <div class="rise">
+    <p class="kicker">04 · Why GIWA</p>
+    <h2>A new chain lives or dies by the builders it attracts.</h2>
+  </div>
+  <div class="cols rise">
+    <div>
+      <p class="t">Ecosystem</p>
+      <h3>Built with Optimism</h3>
+      <p>GIWA is an Ethereum L2 on the OP Stack, in partnership with the Optimism Foundation, the ecosystem that pioneered retroactive builder funding. Mergit brings that idea to GIWA, automated.</p>
     </div>
-
-    <!-- prueba real on-chain -->
-    <div class="onchain">
-      <div class="oc-l">
-        <div class="oc-badge" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06110a"
-               stroke-width="2.4" stroke-linecap="round">
-            <path d="M9.5 14.5l5-5"/>
-            <path d="M13 7l1.6-1.6a3.6 3.6 0 015 5L17 12"/>
-            <path d="M11 17l-1.6 1.6a3.6 3.6 0 01-5-5L7 12"/>
-          </svg>
-        </div>
-        <div>
-          <div class="oc-t">This isn't only a mockup — the escrow is live on GIWA Sepolia.</div>
-          <div class="oc-s">
-            <b>MergitEscrow</b> is deployed and source-verified on GIWA Sepolia (chain 91342), and a full
-            bounty lifecycle has already run on-chain: 0.0005&nbsp;ETH locked, then released to the
-            developer by the verifier — with the evidence hash recorded in the event.
-          </div>
-        </div>
-      </div>
-      <div class="oc-links">
-        <a href="https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879" target="_blank" rel="noopener">verified contract ↗</a>
-        <a href="https://sepolia-explorer.giwa.io/tx/0x356a876c4be477158e0916a0b16f6b6d3075d9703a8cd2bf377c5dbeb9f3e44d" target="_blank" rel="noopener">bounty posted ↗</a>
-        <a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7" target="_blank" rel="noopener">settled &amp; paid ↗</a>
-      </div>
+    <div>
+      <p class="t">Timing</p>
+      <h3>Builders are the scarce resource</h3>
+      <p>Mergit turns funding into shipped code that lands on GIWA, instead of into applications. Low OP Stack fees make even small bounties viable.</p>
+    </div>
+    <div>
+      <p class="t">Synergy</p>
+      <h3>Its own rewards, settled by Mergit</h3>
+      <p>GIWA already invests in builders, manually. Route part of that through Mergit and every payout becomes on-chain activity from a real builder, on GIWA.</p>
     </div>
   </div>
 </section>
 
-<section id="how">
-  <div class="wrap">
-    <div class="kick">03 · How it works</div>
-    <h2>Four steps. No humans in the middle.</h2>
-    <div class="steps">
-      <div class="step"><div class="n">STEP 01</div><h3>Bounty posted</h3>
-        <p>A protocol or ecosystem fund posts a task and locks the reward in an on-chain escrow.</p></div>
-      <div class="step"><div class="n">STEP 02</div><h3>Developer ships</h3>
-        <p>Anyone picks it up and does what developers do: opens a PR, writes tests, deploys the contract.</p></div>
-      <div class="step"><div class="n">STEP 03</div><h3>Agent verifies</h3>
-        <p>Mergit reads the diff, checks CI, confirms the merge and the deployment, and scores confidence.</p></div>
-      <div class="step"><div class="n">STEP 04</div><h3>Instant payout</h3>
-        <p>Escrow releases to the developer's wallet in seconds — with the evidence logged and auditable.</p></div>
-    </div>
+<!-- ── 05 roadmap sobre papel ───────────────────────────── -->
+<section id="roadmap" class="paper">
+  <div class="rise">
+    <p class="kicker">05 · Roadmap</p>
+    <h2>From paying for a merge to knowing who really builds.</h2>
+    <p class="lede">Each step is a commit on the same branch. The red one is where the project stands today.</p>
   </div>
-</section>
 
-<section id="giwa">
-  <div class="wrap">
-    <div class="kick">04 · Why GIWA</div>
-    <h2>The right chain, at the right moment.</h2>
-    <div class="cards">
-      <div class="card">
-        <div class="tag">ECOSYSTEM</div>
-        <h3>Built with Optimism</h3>
-        <p>GIWA is an Ethereum L2 built on the OP Stack in partnership with the Optimism Foundation — the
-          ecosystem that pioneered retroactive builder funding. Mergit brings that idea to GIWA, automated.</p>
-      </div>
-      <div class="card">
-        <div class="tag">TIMING</div>
-        <h3>A new chain needs builders most</h3>
-        <p>Builder acquisition is the first real challenge of any young ecosystem. Mergit makes GIWA the
-          chain where shipping code pays — instantly and provably.</p>
-      </div>
-      <div class="card">
-        <div class="tag">DEMAND</div>
-        <h3>GASOK itself is the signal</h3>
-        <p>GIWA already invests in builders — manually, through programs like this one. Mergit turns that
-          commitment into permanent, automated infrastructure.</p>
-      </div>
+  <div class="roadgrid">
+    <div class="roadgraph rise" id="roadgraph">
+      <!-- el grafo repite la forma del logo: las ramas se unen en un merge rojo y de ahí baja la I -->
+      <svg viewBox="0 0 320 620" preserveAspectRatio="xMidYMin meet" aria-hidden="true">
+        <path class="rlane ghost" d="M90 0 V620"/>
+        <path class="rlane rdraw" style="--d:.1s;--dur:1.1s" d="M90 40 V180"/>
+        <path class="rlane red rdraw" style="--d:.9s;--dur:.9s" d="M90 180 V320"/>
+        <path class="rlane rdraw" style="--d:1.6s;--dur:.9s" d="M90 320 V460"/>
+        <path class="rlane ghost rdraw" style="--d:2.2s;--dur:.9s" d="M90 460 V580"/>
+
+        <circle class="rnode done" style="--d:.2s" cx="90" cy="40" r="9"/>
+        <text class="rlbl" style="--d:.3s" x="122" y="45"><tspan class="t">Escrow live</tspan> · verified on GIWA Sepolia</text>
+
+        <circle class="rpulse" style="--d:1.1s" cx="90" cy="180" r="14"/>
+        <circle class="rnode now" style="--d:1.1s" cx="90" cy="180" r="14"/>
+        <text class="rlbl r" style="--d:1.2s" x="122" y="178"><tspan class="t">Now · pay on merge</tspan></text>
+        <text class="rlbl" style="--d:1.25s" x="122" y="197">the merge pays on its own</text>
+
+        <circle class="rnode next" style="--d:1.9s" cx="90" cy="320" r="10"/>
+        <text class="rlbl" style="--d:2s" x="122" y="325"><tspan class="t">Next</tspan> · GitHub App, on-chain registry</text>
+
+        <circle class="rnode next" style="--d:2.4s" cx="90" cy="460" r="10"/>
+        <text class="rlbl" style="--d:2.5s" x="122" y="465"><tspan class="t">Then</tspan> · builder reputation</text>
+
+        <circle class="rnode far" style="--d:2.8s" cx="90" cy="580" r="10"/>
+        <text class="rlbl" style="--d:2.9s" x="122" y="585"><tspan class="t">Exploring</tspan> · repo funding pools</text>
+      </svg>
     </div>
-  </div>
-</section>
 
-<section id="roadmap">
-  <div class="wrap">
-    <div class="kick">05 · Roadmap</div>
-    <h2>From bounty board to funding layer.</h2>
-    <p class="sectsub">Mapped one-to-one to the GASOK phases.</p>
-    <div class="rm">
-      <div class="rmrow">
-        <div class="rmwhen">PHASE 1 · DONE</div>
-        <div class="rmb"><h3>Escrow live on testnet</h3>
-          <p>MergitEscrow deployed and verified on GIWA Sepolia, with a full bounty lifecycle already
-            settled on-chain — plus this clickable walkthrough of the agent loop.</p></div>
+    <div class="phases rise">
+      <div class="phase is-now">
+        <p class="h"><b>Now</b> · <span class="tagr">live on testnet</span></p>
+        <h3>The merge pays on its own</h3>
+        <ul>
+          <li>MergitEscrow deployed and source-verified on GIWA Sepolia.</li>
+          <li>Agent v1: merged plus CI green on the head commit, evidence hashed into the payment.</li>
+          <li>The agent runs inside GitHub Actions on every merge, and comments the receipt on the pull request.</li>
+          <li>The payout goes to the wallet the repository registered for the author.</li>
+        </ul>
       </div>
-      <div class="rmrow">
-        <div class="rmwhen">PHASE 2 · TESTNET</div>
-        <div class="rmb"><h3>MVP on GIWA testnet</h3>
-          <p>Escrow contracts, GitHub App integration and verification agent v1 running against real repositories.</p></div>
+      <div class="phase">
+        <p class="h"><b>Next</b> · the protocol</p>
+        <h3>One click, and fewer things to trust</h3>
+        <ul>
+          <li>A GitHub App any repository can install.</li>
+          <li>The wallet registry moves on-chain, with a challenge window before a payout is final.</li>
+          <li>Independent verifiers, a bounty board, stablecoin payouts, mainnet.</li>
+        </ul>
       </div>
-      <div class="rmrow">
-        <div class="rmwhen">PHASE 3 · MAINNET</div>
-        <div class="rmb"><h3>Real value flowing</h3>
-          <p>Mainnet escrow with stablecoin payouts, first partner protocols posting live bounties, fee switch on.</p></div>
+      <div class="phase">
+        <p class="h"><b>Then</b> · builder reputation</p>
+        <h3>A record of work that cannot be farmed</h3>
+        <ul>
+          <li>Every settlement becomes a verified record of real, merged, tested work.</li>
+          <li>Builder profiles and a GIWA leaderboard, ranked by work that was actually paid.</li>
+          <li>Ecosystem rewards without applications.</li>
+        </ul>
       </div>
-      <div class="rmrow">
-        <div class="rmwhen">DEMODAY · KBW</div>
-        <div class="rmb"><h3>Live on stage</h3>
-          <p>Merge a pull request in front of the room and watch the payment land in seconds.</p></div>
-      </div>
-      <div class="rmrow">
-        <div class="rmwhen">BEYOND</div>
-        <div class="rmb"><h3>GIWA's funding layer</h3>
-          <p>Automated retroactive funding pools and a builder reputation graph built from verified work.</p></div>
+      <div class="phase">
+        <p class="h"><b>Exploring</b> · subject to regulation</p>
+        <h3>Repo funding pools</h3>
+        <ul>
+          <li>A project's revenue routed into its own repository's bounty pool, so money follows merged work instead of attention.</li>
+        </ul>
       </div>
     </div>
   </div>
+
+  <p class="note">MergitEscrow · <a id="escrowlink" href="#">0xffcf…5879, verified on GIWA Sepolia ↗</a> · 14 tests · solc 0.8.24 · no owner, no pause, no upgrade.</p>
 </section>
 
-<section>
-  <div class="wrap">
-    <div class="ctabox">
-      <h2>Ship code. Get paid. Instantly.</h2>
-      <p class="sectsub">Mergit is being built for GIWA as part of GASOK 2026, Track 04 — AI / Web3.</p>
-      <a class="btn" href="#demo">▶ Run the demo again</a>
+<!-- ── cierre ───────────────────────────────────────────── -->
+<section class="close">
+  <video src="media/arcos.mp4" poster="media/arcos.jpg" autoplay muted loop playsinline></video>
+  <div>
+    <h2>Merge it. <span class="r">Get paid.</span></h2>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/odiseo159-beep/mergit">The code ↗</a>
+      <a class="btn" href="/docs">Tech docs</a>
+      <a class="btn" href="https://x.com/MergitonGIWA">@MergitonGIWA ↗</a>
     </div>
+    <p class="meta">Built for GIWA · GASOK 2026 · Track 04 AI / Web3</p>
   </div>
 </section>
 
 <footer>
-  <div class="wrap">
-    <div class="foot">
-      <div><b>MERG<span style="color:var(--red)">IT</span></b> — Merge it. Get paid.</div>
-      <div>
-        <a href="https://github.com/odiseo159-beep" target="_blank" rel="noopener">GitHub</a> ·
-        <a href="https://x.com/Thecomodor159" target="_blank" rel="noopener">X</a> ·
-        Built by Daniel Francia · SimplifAI S.A.C., Lima, Peru
-      </div>
-    </div>
-    <div class="disclaimer">
-      <b>About this page.</b> Mergit is an early-stage project in Phase 3 of the GASOK program.
-      The <b>walkthrough above is simulated</b>: the repository, pull request, test results and wallet
-      addresses shown in it are illustrative examples, and pressing the button queries no live chain.
-      <b>Everything it illustrates has since been done for real.</b> The verification agent reads a
-      pull request through the GitHub API, checks that it is merged and that the CI for its head
-      commit is green, hashes the evidence and settles the escrow. On 8 September it did exactly that
-      against <a href="https://github.com/odiseo159-beep/mergit-demo/pull/1" target="_blank"
-      rel="noopener">a real merged pull request</a> in a public repository with real tests, and
-      released the payment in the
-      <a href="https://sepolia-explorer.giwa.io/tx/0x09e7522eca66b87abfc17e8fb159615c08105e77f678a9c2f8f6491c53d553a4"
-         target="_blank" rel="noopener" style="color:var(--green)">settlement transaction</a>.
-      The evidence hash recorded on-chain is recomputable from that pull request by anyone.
-      An <a href="https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7"
-      target="_blank" rel="noopener">earlier settlement</a> in July exercised the contract with an
-      illustrative evidence string, before the agent existed.
-      Two limits still stand: these runs are single-operator, with the funder, verifier and fee
-      recipient sharing one address and the developer as a separate party; and the merge does not yet
-      trigger the agent on its own. Independent funders, and the webhook that closes that gap, are
-      what Phase 3 adds.
-    </div>
+  <div class="frow">
+    <span>MERG<span style="color:var(--red)">IT</span> — Merge it. Get paid.</span>
+    <span>
+      <a href="https://github.com/odiseo159-beep/mergit">GitHub</a> ·
+      <a href="https://x.com/MergitonGIWA">X</a> ·
+      <a href="/docs">Docs</a> ·
+      Built by Daniel Francia · SimplifAI S.A.C., Lima, Peru
+    </span>
   </div>
+  <p class="honest">
+    <b>Where this actually stands.</b> Mergit runs on GIWA Sepolia, a testnet, with a single
+    operator: the funder, the verifier and the fee recipient share one address, and the developer is
+    a separate party. Two settlements were triggered by real merged pull requests in a public
+    repository with real tests, the second one automatically, 20 seconds after the merge. Two earlier
+    settlements in July exercised the contract before the agent existed and are not shown above.
+    The verifier's only power is naming who receives a bounty it was assigned: it cannot change the
+    amount, settle twice or after the deadline, or touch a bounty it was not assigned. The agent pays
+    the wallet the repository registered for the pull request's author, but the contract itself would
+    accept any address, so that registry is the part still to move on-chain. Everything shown on this
+    page is read from the chain, and the evidence hash of each payment is recomputable from the public
+    pull request by anyone.
+  </p>
 </footer>
 
-<script>
-(function(){
-  var term = document.getElementById('term');
-  var runBtn = document.getElementById('runBtn');
-  var resetBtn = document.getElementById('resetBtn');
-  var payout = document.getElementById('payout');
-  var diffbox = document.getElementById('diffbox');
-  var bountyState = document.getElementById('bountyState');
-  var escrowState = document.getElementById('escrowState');
-  var note = document.getElementById('note');
-  var timers = [];
-  var running = false;
+<script type="module">
+import { loadActivity, PULLS, EXPLORER, ESCROW, eth, short } from "./media/live.js";
 
-  var IDLE = '<div class="mu">Mergit verification agent · idle</div>' +
-             '<div class="mu">waiting for a bounty to settle…</div>' +
-             '<div><span class="cursor"></span></div>';
+/* ── revelados al hacer scroll ───────────────────────── */
+const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add("in")), { threshold: .18, rootMargin: "0px 0px -8% 0px" });
+document.querySelectorAll(".rise").forEach((el) => io.observe(el));
 
-  function evs(){ return ['ev1','ev2','ev3','ev4','ev5','ev6'].map(function(id){
-    return document.getElementById(id); }); }
+// Respaldo: si el navegador no calcula intersecciones (pestaña en segundo plano, ventana
+// minimizada), nada se revelaría. Revisamos la geometría a mano de vez en cuando.
+const reveal = () => document.querySelectorAll(".rise:not(.in)").forEach((el) => {
+  const r = el.getBoundingClientRect();
+  if (r.top < innerHeight * .92 && r.bottom > 0) el.classList.add("in");
+});
+addEventListener("scroll", reveal, { passive: true });
+addEventListener("resize", reveal);
+setInterval(() => { reveal(); onScroll(); }, 1200);
 
-  function clearAll(){
-    timers.forEach(clearTimeout); timers = [];
-    evs().forEach(function(e){ e.classList.remove('run','pass'); });
-    diffbox.classList.remove('show');
-    payout.classList.remove('show');
-    term.innerHTML = IDLE;
-    bountyState.textContent = 'OPEN';
-    bountyState.className = 'pill open';
-    escrowState.textContent = '◆ locked in escrow';
-    escrowState.style.color = '';
-    runBtn.disabled = false;
-    runBtn.innerHTML = '▶ Run the agent';
-    note.textContent = 'Simulated run — no real funds, no live chain calls.';
-    running = false;
+/* el grafo del roadmap necesita el largo real de cada trazo */
+document.querySelectorAll(".rdraw").forEach((p) => p.style.setProperty("--len", Math.ceil(p.getTotalLength())));
+
+/* ── la barra cambia de color sobre la sección de papel ── */
+const nav = document.getElementById("nav"), papers = [...document.querySelectorAll("section.paper")];
+const onScroll = () => {
+  nav.classList.toggle("stuck", scrollY > 40);
+  nav.classList.toggle("onpaper", papers.some((p) => { const r = p.getBoundingClientRect(); return r.top < 60 && r.bottom > 60; }));
+};
+addEventListener("scroll", onScroll, { passive: true });
+onScroll();
+
+/* ── datos reales de la cadena ───────────────────────── */
+const { settled, live } = await loadActivity();
+const hhmmss = (t) => new Date(t).toISOString().slice(11, 19);
+document.getElementById("dot").classList.toggle("on", live);
+document.getElementById("dotlbl").textContent = live ? "Live · GIWA Sepolia" : "GIWA Sepolia";
+document.getElementById("escrowlink").href = `${EXPLORER}/address/${ESCROW}`;
+
+// cinta del hero
+const rail = document.getElementById("rail");
+const items = settled.map((e) => {
+  const pr = PULLS[e.bountyId];
+  const secs = pr ? Math.round((new Date(e.time) - new Date(pr.merged)) / 1000) : null;
+  return [
+    `<span>bounty <em>#${e.bountyId}</em></span>`,
+    pr ? `<a href="${pr.url}">${pr.pr}</a>` : "",
+    pr ? `<span>merged <em>${hhmmss(pr.merged)}</em></span>` : "",
+    `<span>paid <em>${hhmmss(e.time)}</em> UTC</span>`,
+    pr && pr.auto ? `<span class="hot">${secs} s after the merge</span>` : "",
+    `<span><em>${eth(e.paidToDeveloper)} ETH</em> to ${short(e.developer)}</span>`,
+    `<a href="${EXPLORER}/tx/${e.tx}">tx ${short(e.tx, 8, 4)} ↗</a>`,
+  ].filter(Boolean).join("");
+});
+items.push(`<a href="${EXPLORER}/address/${ESCROW}">MergitEscrow ${short(ESCROW)} · verified ↗</a>`);
+const strip = items.map((h) => `<span style="display:inline-flex;gap:22px">${h}</span>`).join("");
+rail.innerHTML = strip + strip;
+
+/* ── la corrida real, reproducida ────────────────────── */
+const s4 = settled.find((e) => e.bountyId === "4") ?? settled[0];
+const pr4 = PULLS[4];
+const secs = Math.round((new Date(s4.time) - new Date(pr4.merged)) / 1000);
+document.getElementById("f-secs").textContent = `${secs} s`;
+document.getElementById("txbtn").href = `${EXPLORER}/tx/${s4.tx}`;
+document.getElementById("src").textContent = live ? "Real events, read live from GIWA Sepolia" : "Real events · snapshot of GIWA Sepolia";
+
+const tx = (h) => `<a href="${EXPLORER}/tx/${h}">${short(h, 8, 4)}</a>`;
+// solo las líneas con hora salen de GitHub o de la cadena; las demás son pasos del agente
+const T = (t) => `<span class="ts real">${t}</span>`, _ = `<span class="ts">·</span>`;
+const script = [
+  [0,    T("00:46:50"), `bounty <b>#4</b> posted · <span class="h">0.0005 ETH</span> locked in MergitEscrow · tx 0x3154df…afae`],
+  [600,  T("00:48:38"), `<span class="m">PR #2 opened by @odiseo159-beep</span> · "Cover the zero-amount edge of split" · <span class="h">Bounty: #4</span>`],
+  [600,  T("00:48:54"), `<span class="ok">CI test · success on head 86e5882</span>`],
+  [800,  T("00:49:36"), `<b>merged</b> into main · 235c560`, "start"],
+  [900,  _, `<span class="m">GitHub Actions → mergit/agent/on-event.mjs (push)</span>`],
+  [1500, _, `<span class="ok">merged by a maintainer</span>`],
+  [900,  _, `<span class="ok">CI green on the head commit, 1/1</span>`],
+  [1100, _, `evidence → keccak256 → <span class="h">${short(s4.evidenceHash, 10, 6)}</span>`],
+  [1200, _, `<span class="ok">bounty #4 Open · before deadline · I am its verifier</span>`],
+  [1100, _, `<span class="ok">wallet from mergit.json → ${short(s4.developer)}</span>`],
+  [1200, _, `<span class="m">simulate settle(4, ${short(s4.developer)}, ${short(s4.evidenceHash, 6, 4)}) … accepted</span>`],
+  [1100, _, `<span class="m">signing · waiting for GIWA Sepolia</span><span class="caret"></span>`],
+  [0,    T(hhmmss(s4.time)), `<span class="paid">PAID</span> <b>${eth(s4.paidToDeveloper)} ETH</b> → ${short(s4.developer)} · fee ${eth(s4.protocolFee)} · block ${Number(s4.block).toLocaleString("en-US")} · tx ${tx(s4.tx)}`, "end"],
+  [900,  _, `<span class="m">receipt commented on PR #2</span>`],
+  [700,  _, `<span class="h">merge it. get paid.</span>`],
+];
+
+const log = document.getElementById("log"), clock = document.getElementById("clock"), term = document.getElementById("term");
+let t0 = null, raf = null, run = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const tick = () => { clock.innerHTML = `${((performance.now() - t0) / 1000).toFixed(1).padStart(4, "0")}<small>s</small>`; raf = requestAnimationFrame(tick); };
+function line(ts, html) {
+  log.querySelector(".caret")?.remove();
+  const d = document.createElement("div");
+  d.className = "ln";
+  d.innerHTML = `${ts}<span>${html}</span>`;
+  log.appendChild(d);
+  while (log.children.length > 13) log.firstChild.remove();
+}
+async function play() {
+  const me = ++run;
+  cancelAnimationFrame(raf);
+  log.innerHTML = "";
+  clock.className = "t";
+  clock.innerHTML = `00.0<small>s</small>`;
+  for (const [delay, ts, html, mark] of script) {
+    if (me !== run) return;
+    if (mark === "end") {
+      const wait = secs * 1000 - (performance.now() - t0);
+      if (wait > 0) await sleep(wait);
+      if (me !== run) return;
+      cancelAnimationFrame(raf);
+      clock.innerHTML = `${secs.toFixed(1)}<small>s</small>`;
+      clock.className = "t done";
+      term.classList.remove("flash"); void term.offsetWidth; term.classList.add("flash");
+    } else await sleep(delay);
+    if (me !== run) return;
+    line(ts, html);
+    if (mark === "start") { t0 = performance.now(); clock.className = "t run"; tick(); }
   }
-
-  function line(html){
-    var cur = term.querySelector('.cursor');
-    if (cur) cur.parentNode.remove();
-    var d = document.createElement('div');
-    d.innerHTML = html;
-    term.appendChild(d);
-    var c = document.createElement('div');
-    c.innerHTML = '<span class="cursor"></span>';
-    term.appendChild(c);
-    term.parentNode.scrollTop = term.parentNode.scrollHeight;
-  }
-
-  function at(ms, fn){ timers.push(setTimeout(fn, ms)); }
-
-  // ── the sequence ───────────────────────────────────────────
-  function run(instant){
-    clearAll();
-    running = true;
-    runBtn.disabled = true;
-    runBtn.innerHTML = 'Verifying…';
-    note.textContent = 'Agent running — reading the evidence on the left.';
-    term.innerHTML = '';
-
-    var k = instant ? 0 : 1;               // instant=0 → jump straight to the end state
-    var E = evs();
-
-    line('<span class="rd">$</span> mergit verify bounty#42');
-    at(300*k, function(){ line('<span class="mu">→ connecting to escrow · bounty #42 · 500 USDT locked</span>'); });
-    at(700*k, function(){
-      bountyState.textContent = 'VERIFYING'; bountyState.className = 'pill work';
-      line('<span class="mu">→ fetching odiseo/giwa-oracle#7…</span>');
-      E[0].classList.add('run');
-    });
-    at(1200*k, function(){
-      E[0].classList.replace('run','pass');
-      line('<span class="g">✓</span> pull request found · +148 −12 across 3 files');
-      E[1].classList.add('run');
-      diffbox.classList.add('show');
-    });
-    at(2000*k, function(){
-      E[1].classList.replace('run','pass');
-      line('<span class="g">✓</span> diff matches the bounty spec <span class="mu">(IPriceFeed implemented)</span>');
-      E[2].classList.add('run');
-      line('<span class="mu">→ running test suite…</span>');
-    });
-    at(2900*k, function(){
-      E[2].classList.replace('run','pass');
-      line('<span class="g">✓</span> CI green · <span class="bl">34 passed</span>, 0 failed · coverage 91%');
-      E[3].classList.add('run');
-    });
-    at(3500*k, function(){
-      E[3].classList.replace('run','pass');
-      line('<span class="g">✓</span> merged to main by maintainer · commit 9f2c1ab');
-      E[4].classList.add('run');
-    });
-    at(4100*k, function(){
-      E[4].classList.replace('run','pass');
-      line('<span class="g">✓</span> contract deployed &amp; verified · bytecode matches commit');
-      E[5].classList.add('run');
-    });
-    at(4700*k, function(){
-      E[5].classList.replace('run','pass');
-      line('<span class="g">✓</span> no sybil signals · contribution history consistent');
-      line('<span class="mu">→ scoring…</span>');
-    });
-    at(5300*k, function(){
-      line('<span class="am">⚑</span> verdict: <span class="g">WORK VERIFIED</span> · confidence <b>0.97</b>');
-      line('<span class="mu">→ releasing escrow…</span>');
-    });
-    at(6000*k, function(){
-      line('<span class="rd">⚡</span> 500 USDT → <span class="bl">0x7f3…a21</span> <span class="mu">(4.2s)</span>');
-      line('<span class="mu">bounty #42 settled · evidence log written</span>');
-      bountyState.textContent = 'PAID'; bountyState.className = 'pill done';
-      escrowState.textContent = '✓ released to developer';
-      escrowState.style.color = 'var(--green)';
-      payout.classList.add('show');
-      runBtn.disabled = false;
-      runBtn.innerHTML = '↻ Run it again';
-      note.textContent = 'Settled in 4.2 seconds — with zero human approvals.';
-      running = false;
-      if (!instant) location.hash = 'paid';
-    });
-  }
-
-  runBtn.addEventListener('click', function(){ if(!running) run(false); });
-  resetBtn.addEventListener('click', function(){ clearAll(); });
-
-  // deep-link states (also used for automated screenshots)
-  function applyHash(){
-    var h = (location.hash || '').replace('#','');
-    if (h !== 'paid' && h !== 'verifying') return;
-    document.documentElement.classList.add('noanim');
-    if (h === 'paid') { run(true); }
-    else if (h === 'verifying') {
-      clearAll(); running = true;
-      runBtn.disabled = true; runBtn.innerHTML = 'Verifying…';
-      term.innerHTML = '';
-      line('<span class="rd">$</span> mergit verify bounty#42');
-      line('<span class="mu">→ fetching odiseo/giwa-oracle#7…</span>');
-      line('<span class="g">✓</span> pull request found · +148 −12 across 3 files');
-      line('<span class="g">✓</span> diff matches the bounty spec');
-      line('<span class="mu">→ running test suite…</span>');
-      var E = evs();
-      E[0].classList.add('pass'); E[1].classList.add('pass'); E[2].classList.add('run');
-      diffbox.classList.add('show');
-      bountyState.textContent = 'VERIFYING'; bountyState.className = 'pill work';
-    }
-  }
-  if (location.hash) applyHash();
-})();
+  await sleep(12000);
+  if (me === run) play();
+}
+document.getElementById("replay").addEventListener("click", play);
+// arranca cuando la terminal entra en pantalla, no antes
+let started = false;
+const maybePlay = () => {
+  if (started) return;
+  const r = term.getBoundingClientRect();
+  if (r.top < innerHeight * .8 && r.bottom > innerHeight * .2) { started = true; play(); }
+};
+new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting && !started) { started = true; play(); } }), { threshold: .35 }).observe(term);
+addEventListener("scroll", maybePlay, { passive: true });
+const watch = setInterval(() => { maybePlay(); if (started) clearInterval(watch); }, 1200);
 </script>
 </body>
 </html>
