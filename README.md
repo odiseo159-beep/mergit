@@ -14,7 +14,7 @@ Submitted to **GASOK 2026**, Track 04 — AI / Web3.
 
 | | |
 |---|---|
-| 🌐 Product walkthrough | **https://mergit-nine.vercel.app** |
+| 🌐 Product walkthrough | **https://www.mergit.xyz** |
 | 📄 Escrow contract | [`0xffcf206ce1474263aaa3336fb9c8bc3d632e5879`](https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879) — **verified** on GIWA Sepolia |
 | ⛓ Bounty settled on-chain | [`0x2e8a04f7…b9d7`](https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7) |
 

@@ -1,6 +1,6 @@
 # MergitEscrow — GIWA Sepolia
 
-Bounty escrow contract powering [Mergit](https://mergit-nine.vercel.app), submitted to the
+Bounty escrow contract powering [Mergit](https://www.mergit.xyz), submitted to the
 GASOK 2026 program (Track 04 — AI / Web3).
 
 A funder locks ETH against a task and names a **verifier** — the Mergit AI agent. When the
