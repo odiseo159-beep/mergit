@@ -14,14 +14,54 @@ Submitted to **GASOK 2026**, Track 04 — AI / Web3.
 
 | | |
 |---|---|
-| 🌐 Product walkthrough | **https://www.mergit.xyz** |
+| 🌐 Site | **https://www.mergit.xyz** |
 | 📄 Escrow contract | [`0xffcf206ce1474263aaa3336fb9c8bc3d632e5879`](https://sepolia-explorer.giwa.io/address/0xffcf206ce1474263aaa3336fb9c8bc3d632e5879) — **verified** on GIWA Sepolia |
-| ⛓ Bounty settled on-chain | [`0x2e8a04f7…b9d7`](https://sepolia-explorer.giwa.io/tx/0x2e8a04f7393c4c4457acfc5aba5f06091893a9105ef663531ae43b22c3a3b9d7) |
+| ⛓ Paid on merge | [`0x567a7c4b…bc44`](https://sepolia-explorer.giwa.io/tx/0x567a7c4b851b8b09f10d3aee2caea4883c6859a7aec625e2d1e750c7c161bc44) — [mergit-demo#2](https://github.com/odiseo159-beep/mergit-demo/pull/2) merged 00:49:36, paid 00:49:56 UTC |
 
-The contract is **really deployed** and a complete bounty lifecycle has already been executed on
-GIWA Sepolia: funds locked in escrow, then released to the developer by the verifier, with a hash
-of the evidence recorded in the event. The interactive demo on the website is *simulated* and
-labelled as such — it illustrates the agent loop that Phase 2 will run against real repositories.
+On 19 September 2026 nobody ran a command: the merge woke the agent inside GitHub Actions, it
+verified the pull request, and the escrow paid the developer **20 seconds later**. Every amount,
+hash and transaction on the site is read from the chain.
+
+## Add Mergit to your repository
+
+Two files, and the merge pays.
+
+**1. `mergit.json`** — who gets paid, by GitHub login:
+
+```json
+{ "wallets": { "your-github-login": "0xYourWallet" } }
+```
+
+**2. `.github/workflows/mergit.yml`** — the agent, on every merge:
+
+```yaml
+name: Mergit
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: mergit-settle
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: odiseo159-beep/mergit@v1
+        with:
+          agent-key: ${{ secrets.MERGIT_AGENT_KEY }}
+```
+
+Then write `Bounty: #N` in the body of a pull request. When it is merged and its CI is green, the
+agent settles bounty `N` to the author's registered wallet and comments the receipt on the pull
+request.
+
+Without `agent-key` the action still runs: it verifies and reports what it *would* pay, and signs
+nothing. That is the safest way to try it.
 
 ## Why this exists
 
@@ -36,8 +76,10 @@ then release the money in minutes instead of a quarter.
 ## Repository layout
 
 ```
+action.yml   The reusable GitHub Action: one step, and the merge pays
+agent/       The verification agent: reads the pull request, decides, settles
 contracts/   MergitEscrow.sol + Hardhat tests, deploy and verify scripts
-site/        Product page and interactive demo (static HTML/CSS/JS)
+site/        The site and its technical one-pager (static HTML/CSS/JS)
 ```
 
 See [`contracts/README.md`](contracts/README.md) for the contract design, deployment details and
@@ -57,8 +99,8 @@ that asks people to trust its operator has not solved the problem it claims to s
 
 | Phase | Status |
 |---|---|
-| **1 — Concept & screening** | ✅ Escrow deployed and verified on GIWA Sepolia; lifecycle settled on-chain |
-| **2 — Testnet MVP** | GitHub App integration, verification agent v1 against real repositories |
+| **1 — Concept & screening** | ✅ Escrow deployed and verified on GIWA Sepolia; full lifecycle settled on-chain |
+| **2 — Testnet MVP** | 🔄 Agent v1 runs on every merge, as a reusable action. Next: wallet registry on-chain, challenge window, posting bounties from the browser |
 | **3 — Mainnet** | Stablecoin payouts, first partner protocols, fee switch on |
 | **Demoday @ KBW** | Merge a PR live on stage, watch the payment land |
 | **Beyond** | Automated retroactive funding pools and a builder reputation graph |

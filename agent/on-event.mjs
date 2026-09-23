@@ -18,6 +18,7 @@
 // Variables de entorno (las pone el workflow):
 //   GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_NAME, GITHUB_EVENT_PATH
 //   MERGIT_AGENT_KEY  clave del agente. Sin ella, todo corre en modo ensayo.
+//   MERGIT_PR         opcional: número de PR a revisar, para una corrida manual.
 import { readFileSync, appendFileSync } from "node:fs";
 import { formatEther } from "viem";
 import { settleBounty } from "./settle.mjs";
@@ -53,8 +54,11 @@ const say = (line) => {
 // ───────────────────── 1. ¿Qué commit disparó esto? ──────────────────
 
 const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+// Un número de PR pasado a mano gana sobre el evento: sirve para reintentar una corrida.
+const asked = Number(process.env.MERGIT_PR || payload.inputs?.pr) || null;
 let sha;
-if (EVENT === "push") sha = payload.after;
+if (asked) sha = null;
+else if (EVENT === "push") sha = payload.after;
 else if (EVENT === "workflow_run") sha = payload.workflow_run.head_sha;
 else if (EVENT === "workflow_dispatch") sha = null;
 else {
@@ -65,12 +69,9 @@ else {
 // ─────────────────── 2. ¿Qué pull requests toca ese commit? ───────────
 
 let prs;
-if (EVENT === "workflow_dispatch") {
-  const n = Number(payload.inputs?.pr);
-  prs = n ? [await gh(`/repos/${REPO}/pulls/${n}`)] : [];
-} else {
-  prs = await gh(`/repos/${REPO}/commits/${sha}/pulls`);
-}
+if (asked) prs = [await gh(`/repos/${REPO}/pulls/${asked}`)];
+else if (EVENT === "workflow_dispatch") prs = [];
+else prs = await gh(`/repos/${REPO}/commits/${sha}/pulls`);
 if (!prs.length) {
   say(`Mergit: no pull request is associated with \`${sha?.slice(0, 7)}\`. Nothing to do.`);
   finish();

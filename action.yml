@@ -1,0 +1,49 @@
+name: Mergit
+description: Pay a merged pull request from its on-chain bounty, after checking that the merge and the CI are real.
+author: Mergit
+
+branding:
+  icon: git-merge
+  color: red
+
+inputs:
+  agent-key:
+    description: >-
+      Private key of the bounty's verifier, as a repository secret. Without it the
+      action still verifies and reports, but signs nothing: a rehearsal.
+    required: false
+  github-token:
+    description: Token used to read the pull request and comment the receipt.
+    required: false
+    default: ${{ github.token }}
+  pull-request:
+    description: Pull request number to re-check. Only needed for a manual run.
+    required: false
+  node-version:
+    description: Node version used to run the agent.
+    required: false
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ github.action_path }}/agent/package-lock.json
+
+    - name: Install the agent
+      shell: bash
+      working-directory: ${{ github.action_path }}/agent
+      run: npm ci --omit=dev
+
+    - name: Verify the merge and settle the bounty
+      shell: bash
+      working-directory: ${{ github.action_path }}/agent
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        MERGIT_AGENT_KEY: ${{ inputs.agent-key }}
+        MERGIT_PR: ${{ inputs.pull-request }}
+      run: node on-event.mjs

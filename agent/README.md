@@ -39,6 +39,19 @@ quietly too.
 On payment it comments on the pull request with the amount, the evidence hash and
 the transaction. See `odiseo159-beep/mergit-demo` for a working setup.
 
+Any repository plugs it in with one step, through the action at the root of this
+repository:
+
+```yaml
+      - uses: odiseo159-beep/mergit@v1
+        with:
+          agent-key: ${{ secrets.MERGIT_AGENT_KEY }}
+```
+
+The action installs the agent and runs `on-event.mjs` with the right environment.
+Its `pull-request` input re-checks a single pull request by number, which is what a
+manual re-run needs; `MERGIT_PR` does the same when the agent runs on its own.
+
 `GITHUB_TOKEN` is optional: without it the agent reads public repositories at
 60 requests per hour. `MERGIT_ESCROW` overrides the contract address, which
 otherwise comes from `../contracts/deployment.json`.
