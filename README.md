@@ -80,7 +80,7 @@ then release the money in minutes instead of a quarter.
 ```
 action.yml   The reusable GitHub Action: one step, and the merge pays
 agent/       The verification agent: reads the pull request, decides, settles
-contracts/   MergitEscrow.sol + Hardhat tests, deploy and verify scripts
+contracts/   MergitEscrow.sol and MergitRegistry.sol + Hardhat tests and deploy scripts
 site/        The site and its technical one-pager (static HTML/CSS/JS)
 ```
 
@@ -102,7 +102,7 @@ that asks people to trust its operator has not solved the problem it claims to s
 | Phase | Status |
 |---|---|
 | **1 — Concept & screening** | ✅ Escrow deployed and verified on GIWA Sepolia; full lifecycle settled on-chain |
-| **2 — Testnet MVP** | 🔄 Agent v1 runs on every merge, as a reusable action. Next: wallet registry on-chain, challenge window, posting bounties from the browser |
+| **2 — Testnet MVP** | 🔄 Agent v1 runs on every merge, as a reusable action; developers claim their GitHub login on-chain with a proof the agent checks. Next: challenge window, posting bounties from the browser |
 | **3 — Mainnet** | Stablecoin payouts, first partner protocols, fee switch on |
 | **Demoday @ KBW** | Merge a PR live on stage, watch the payment land |
 | **Beyond** | Automated retroactive funding pools and a builder reputation graph |

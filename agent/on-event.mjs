@@ -11,8 +11,11 @@
 //
 // Qué lee:
 //   - el cuerpo del PR, una línea "Bounty: #N" que dice qué bounty cobra
-//   - mergit.json en la rama principal: el registro de wallets de los autores.
-//     El pago va a la wallet registrada del autor del PR, no a una dirección
+//   - el registro on-chain (MergitRegistry): si el autor reclamó su login desde
+//     su wallet, ahí está el destinatario, y el agente comprueba la prueba en
+//     GitHub antes de pagar.
+//   - mergit.json en la rama principal, para quien todavía no lo reclamó.
+//     En los dos casos el destinatario es del autor del PR, no una dirección
 //     que el agente elija.
 //
 // Variables de entorno (las pone el workflow):
@@ -22,6 +25,7 @@
 import { readFileSync, appendFileSync } from "node:fs";
 import { formatEther } from "viem";
 import { settleBounty } from "./settle.mjs";
+import { resolveWallet, registryAddress } from "./registry.mjs";
 
 const API = "https://api.github.com";
 const REPO = process.env.GITHUB_REPOSITORY;
@@ -89,12 +93,17 @@ for (const pr of prs) {
   }
   const bountyId = bountyMatch[1];
   const author = pr.user.login;
-  const developer = registry[author.toLowerCase()];
+
+  // El registro on-chain manda; `mergit.json` es el camino viejo, todavía válido
+  // mientras el autor no reclame su login.
+  const who = await resolveWallet(author, registry[author.toLowerCase()], TOKEN);
+  const developer = who.wallet;
   if (!developer) {
-    say(`${tag}: @${author} has no wallet in \`mergit.json\`. Not paid.`);
-    if (pr.merged_at) await comment(pr.number, `**Mergit did not pay this pull request.** @${author} has no registered wallet in \`mergit.json\`, so there is nowhere to send bounty #${bountyId}. Add one and re-run the workflow.`);
+    say(`${tag}: ${who.reason}. Not paid.`);
+    if (pr.merged_at) await comment(pr.number, `**Mergit did not pay this pull request.** ${who.reason}, so there is nowhere to send bounty #${bountyId}.`);
     continue;
   }
+  say(`${tag}: paying @${author} at ${developer} (${who.source === "registry" ? `claimed on-chain, proof in ${who.proof}` : "from mergit.json"}).`);
 
   const r = await settleBounty({ bountyId, target: { owner: OWNER, repo: NAME, number: pr.number }, developer, send: SEND });
   const v = r.verdict;
@@ -128,7 +137,7 @@ for (const pr of prs) {
     `| | |`,
     `|---|---|`,
     `| Bounty | #${bountyId} |`,
-    `| Paid to | \`${developer}\`, @${author}'s registered wallet |`,
+    `| Paid to | \`${developer}\` — ${who.source === "registry" ? `claimed on-chain by @${author}, proof in ${who.proof}` : `@${author}'s wallet in \`mergit.json\``} |`,
     `| Amount | ${formatEther(r.event.paidToDeveloper)} ETH (protocol fee ${formatEther(r.event.protocolFee)} ETH) |`,
     `| Verified | merged, CI green on head commit \`${v.evidence.headSha.slice(0, 7)}\` |`,
     `| Evidence hash | \`${r.event.evidenceHash}\` |`,

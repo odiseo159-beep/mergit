@@ -61,6 +61,30 @@ manual re-run needs; `MERGIT_PR` does the same when the agent runs on its own.
 60 requests per hour. `MERGIT_ESCROW` overrides the contract address, which
 otherwise comes from `../contracts/deployment.json`.
 
+## Who gets paid: `registry.mjs` and `claim.mjs`
+
+The recipient used to come from `mergit.json`, a file in the repository. That works,
+but it means the funder's repository decides who a developer is. The registry moves
+that claim on-chain, where it belongs to the developer:
+
+```
+node claim.mjs --login <github> --proof https://gist.github.com/<github>/<id> --send
+node claim.mjs --who <github>
+```
+
+`MergitRegistry` stores the claim, its date and a pointer to the proof. It cannot
+check the proof itself, because a contract cannot read GitHub. The agent does that,
+the same way anyone else could: it asks GitHub for the gist or the profile README,
+checks it belongs to that login, and checks it contains the claimed address. A claim
+whose proof does not hold **is not paid**, and the agent does not quietly fall back
+to the file: a broken claim has to hurt.
+
+One wallet holds at most one login and one login at most one wallet, so the reverse
+index is already a profile: from an address you reach its login, and from there its
+settlements. That is the seed of the builder reputation in the roadmap.
+
+While a developer has not claimed their login, `mergit.json` still works.
+
 ## What "verified" means today
 
 A pull request passes when it is **merged** and its **CI is green**. Both
