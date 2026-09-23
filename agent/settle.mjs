@@ -20,6 +20,7 @@ import {
   EXPLORER,
   ABI,
   STATUS,
+  escrowFlavor,
   publicClient,
   fail,
   loadSecrets,
@@ -43,8 +44,13 @@ function agentKey() {
  *   done:  true si el bounty ya no estaba abierto (otra corrida lo pagó antes)
  */
 export async function settleBounty({ bountyId, target, developer, send = false }) {
-  const contract = { address: escrowAddress(), abi: ABI };
-  const result = { bountyId: String(bountyId), escrow: contract.address, developer };
+  const address = escrowAddress();
+  // La v2 puede dejar el pago pendiente durante la ventana de objeción. Se
+  // detecta por la interfaz del contrato, no por configuración.
+  const flavor = await escrowFlavor(address);
+  const contract = { address, abi: flavor.abi };
+  const STATUS = flavor.status;
+  const result = { bountyId: String(bountyId), escrow: address, developer, v2: flavor.v2 };
 
   // 1. ¿Existe el trabajo?
   const verdict = await verifyPullRequest(target);
@@ -60,6 +66,22 @@ export async function settleBounty({ bountyId, target, developer, send = false }
   }
   const [payout, fee] = await publicClient.readContract({ ...contract, functionName: "quote", args: [bounty.amount] });
   Object.assign(result, { bounty, status: STATUS[bounty.status], payout, fee });
+
+  // Un pago pendiente no se vuelve a liquidar: se finaliza cuando vence la ventana.
+  if (STATUS[bounty.status] === "Pending") {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (now < BigInt(bounty.claimableAt)) {
+      return {
+        ...result,
+        stage: "pending",
+        ok: true,
+        reason: `settlement waiting out the challenge window`,
+        claimableAt: Number(bounty.claimableAt),
+        proposedDeveloper: bounty.developer,
+      };
+    }
+    return finalizeBounty({ bountyId, contract, bounty, result, send });
+  }
 
   if (STATUS[bounty.status] !== "Open") {
     return { ...result, stage: "bounty", ok: false, done: true, reason: `bounty is ${STATUS[bounty.status]}` };
@@ -102,15 +124,66 @@ export async function settleBounty({ bountyId, target, developer, send = false }
       // un log ajeno en el mismo recibo
     }
   }
+  const proposed = receipt.logs.some((log) => {
+    try {
+      return decodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics }).eventName === "SettlementProposed";
+    } catch {
+      return false;
+    }
+  });
+
   return {
     ...result,
-    stage: "paid",
+    stage: proposed ? "proposed" : "paid",
     ok: true,
     tx: hash,
     block: receipt.blockNumber,
     gasUsed: receipt.gasUsed,
     event,
     hashMatches: event?.evidenceHash === verdict.evidenceHash,
+    url: `${EXPLORER}/tx/${hash}`,
+  };
+}
+
+/** Suelta un pago que ya cumplió su ventana de objeción. Lo puede llamar cualquiera. */
+async function finalizeBounty({ bountyId, contract, bounty, result, send }) {
+  const key = agentKey();
+  const account = key ? privateKeyToAccount(key) : null;
+  let request;
+  try {
+    ({ request } = await publicClient.simulateContract({
+      ...contract,
+      functionName: "finalize",
+      args: [BigInt(bountyId)],
+      account: account ?? bounty.verifier,
+    }));
+  } catch (e) {
+    return { ...result, stage: "simulate", ok: false, reason: e.shortMessage ?? e.message };
+  }
+  if (!send || !account) return { ...result, stage: "dry-run", ok: true, finalizing: true, developer: bounty.developer };
+
+  const wallet = createWalletClient({ account, chain: giwaSepolia, transport: http() });
+  const hash = await wallet.writeContract(request);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  let event = null;
+  for (const log of receipt.logs) {
+    try {
+      const e = decodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics });
+      if (e.eventName === "BountySettled") event = e.args;
+    } catch {
+      // un log ajeno en el mismo recibo
+    }
+  }
+  return {
+    ...result,
+    stage: "paid",
+    ok: true,
+    finalized: true,
+    developer: bounty.developer,
+    tx: hash,
+    block: receipt.blockNumber,
+    gasUsed: receipt.gasUsed,
+    event,
     url: `${EXPLORER}/tx/${hash}`,
   };
 }

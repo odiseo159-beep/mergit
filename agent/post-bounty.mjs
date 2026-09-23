@@ -13,6 +13,7 @@ import {
   giwaSepolia,
   EXPLORER,
   ABI,
+  escrowFlavor,
   publicClient,
   fail,
   loadSecrets,
@@ -42,7 +43,14 @@ const funder = privateKeyToAccount(funderKey);
 const verifier = arg.value("verifier") ?? funder.address;
 const deadline = BigInt(Math.floor(Date.now() / 1000) + days * 86400);
 
-const contract = { address: escrowAddress(), abi: ABI };
+const address = escrowAddress();
+const flavor = await escrowFlavor(address);
+const contract = { address, abi: flavor.abi };
+
+// La v2 acepta una ventana de objeción por bounty. Cero, el valor por defecto,
+// se comporta como la v1: el pago sale en el mismo bloque que la verificación.
+const windowSeconds = Number(arg.value("window") ?? 0);
+if (windowSeconds && !flavor.v2) fail("este escrow no tiene ventana de objeción: es la v1");
 const balance = await publicClient.getBalance({ address: funder.address });
 
 console.log(`escrow      : ${contract.address}`);
@@ -57,7 +65,7 @@ if (balance < amount) fail(`saldo insuficiente: hacen falta ${formatEther(amount
 const { request } = await publicClient.simulateContract({
   ...contract,
   functionName: "postBounty",
-  args: [verifier, deadline, metadataURI],
+  args: flavor.v2 ? [verifier, deadline, windowSeconds, metadataURI] : [verifier, deadline, metadataURI],
   value: amount,
   account: funder,
 });
@@ -77,7 +85,7 @@ console.log(`confirmada en el bloque ${receipt.blockNumber}\n`);
 
 for (const log of receipt.logs) {
   try {
-    const event = decodeEventLog({ abi: ABI, data: log.data, topics: log.topics });
+    const event = decodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics });
     if (event.eventName !== "BountyPosted") continue;
     console.log(`bounty #${event.args.bountyId} abierto con ${formatEther(event.args.amount)} ETH bloqueados`);
     console.log(`\nliquídalo con:\n  node settle.mjs --bounty ${event.args.bountyId} --pr <url del PR> --send`);

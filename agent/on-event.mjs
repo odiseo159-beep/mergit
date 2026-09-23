@@ -108,6 +108,13 @@ for (const pr of prs) {
   const r = await settleBounty({ bountyId, target: { owner: OWNER, repo: NAME, number: pr.number }, developer, send: SEND });
   const v = r.verdict;
 
+  // El pago está aprobado pero corre la ventana de objeción del financiador.
+  if (r.stage === "pending") {
+    const when = new Date(r.claimableAt * 1000).toISOString().replace("T", " ").slice(0, 19);
+    say(`${tag}: settlement proposed, claimable at ${when} UTC. Waiting out the challenge window.`);
+    continue;
+  }
+
   // Esperas: otro evento lo reintentará. Sin comentario, para no ensuciar el PR.
   if (r.stage === "verify" && !v.merged) { say(`${tag}: not merged yet. Waiting.`); continue; }
   if (r.stage === "verify" && v.ciPending) { say(`${tag}: CI still running on \`${v.evidence.headSha.slice(0, 7)}\`. Waiting for green.`); continue; }
@@ -125,12 +132,26 @@ for (const pr of prs) {
   }
 
   if (r.stage === "dry-run") {
-    say(`${tag}: verified. Would pay ${formatEther(r.payout)} ETH to ${developer} (dry run: no MERGIT_AGENT_KEY).`);
+    const what = r.finalizing ? "Would finalize the pending payment of" : "Would pay";
+    say(`${tag}: verified. ${what} ${formatEther(r.payout)} ETH to ${developer} (dry run: no MERGIT_AGENT_KEY).`);
+    continue;
+  }
+
+  // Con ventana de objeción el pago no sale todavía: queda propuesto.
+  if (r.stage === "proposed") {
+    say(`${tag}: settlement proposed for ${developer}. The funder can challenge it. ${r.url}`);
+    await comment(pr.number, [
+      `**Mergit approved this pull request.**`,
+      ``,
+      `Bounty #${bountyId} will pay \`${developer}\` once the challenge window closes. Until then, the funder can object once.`,
+      ``,
+      `Verified: merged, CI green on \`${v.evidence.headSha.slice(0, 7)}\` · evidence \`${r.verdict.evidenceHash}\` · [transaction](${r.url})`,
+    ].join("\n"));
     continue;
   }
 
   // Pagado.
-  say(`${tag}: PAID ${formatEther(r.event.paidToDeveloper)} ETH to ${developer}. ${r.url}`);
+  say(`${tag}: PAID ${formatEther(r.event.paidToDeveloper)} ETH to ${developer}${r.finalized ? " (finalized after the challenge window)" : ""}. ${r.url}`);
   await comment(pr.number, [
     `**Mergit paid this pull request.**`,
     ``,

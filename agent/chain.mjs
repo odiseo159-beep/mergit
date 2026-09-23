@@ -14,8 +14,9 @@ export const giwaSepolia = {
 
 export const EXPLORER = giwaSepolia.blockExplorers.default.url;
 
-// Estados del enum Status del contrato, en su orden.
+// Estados del enum Status del contrato, en su orden. La v2 mete Pending en medio.
 export const STATUS = ["None", "Open", "Settled", "Refunded"];
+export const STATUS_V2 = ["None", "Open", "Pending", "Settled", "Refunded"];
 
 // Solo lo que el agente usa. Así este directorio no depende de que alguien
 // haya compilado los contratos antes.
@@ -96,7 +97,75 @@ export const ABI = [
   },
 ];
 
+// La v2 añade la ventana de objeción: el pago puede quedar pendiente y hay que
+// finalizarlo después, y el financiador puede objetarlo una vez.
+export const ABI_V2 = [
+  ...ABI.filter((x) => !["postBounty", "getBounty"].includes(x.name)),
+  {
+    type: "function",
+    name: "postBounty",
+    stateMutability: "payable",
+    inputs: [
+      { name: "verifier", type: "address" },
+      { name: "deadline", type: "uint64" },
+      { name: "challengeWindow", type: "uint32" },
+      { name: "metadataURI", type: "string" },
+    ],
+    outputs: [{ name: "bountyId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getBounty",
+    stateMutability: "view",
+    inputs: [{ name: "bountyId", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "funder", type: "address" },
+          { name: "verifier", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "deadline", type: "uint64" },
+          { name: "challengeWindow", type: "uint32" },
+          { name: "status", type: "uint8" },
+          { name: "developer", type: "address" },
+          { name: "claimableAt", type: "uint64" },
+          { name: "challenged", type: "bool" },
+          { name: "evidenceHash", type: "bytes32" },
+        ],
+      },
+    ],
+  },
+  { type: "function", name: "finalize", stateMutability: "nonpayable", inputs: [{ name: "bountyId", type: "uint256" }], outputs: [] },
+  { type: "function", name: "challenge", stateMutability: "nonpayable", inputs: [{ name: "bountyId", type: "uint256" }], outputs: [] },
+  { type: "function", name: "MAX_CHALLENGE_WINDOW", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
+  {
+    type: "event",
+    name: "SettlementProposed",
+    inputs: [
+      { name: "bountyId", type: "uint256", indexed: true },
+      { name: "developer", type: "address", indexed: true },
+      { name: "verifier", type: "address", indexed: true },
+      { name: "claimableAt", type: "uint64", indexed: false },
+      { name: "evidenceHash", type: "bytes32", indexed: false },
+    ],
+  },
+];
+
 export const publicClient = createPublicClient({ chain: giwaSepolia, transport: http() });
+
+/**
+ * Qué contrato hay en esa dirección. Se pregunta a la cadena en vez de
+ * configurarlo: solo la v2 responde MAX_CHALLENGE_WINDOW.
+ */
+export async function escrowFlavor(address) {
+  try {
+    await publicClient.readContract({ address, abi: ABI_V2, functionName: "MAX_CHALLENGE_WINDOW" });
+    return { v2: true, abi: ABI_V2, status: STATUS_V2 };
+  } catch {
+    return { v2: false, abi: ABI, status: STATUS };
+  }
+}
 
 export function fail(msg) {
   console.error(`\nabortado: ${msg}`);
@@ -109,6 +178,10 @@ export function loadSecrets() {
   return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
 }
 
+/**
+ * Dónde está el escrow. Por defecto la v1, que es la que tiene la historia de
+ * pagos; `MERGIT_ESCROW` apunta a la v2 o a cualquier otro despliegue.
+ */
 export function escrowAddress() {
   if (process.env.MERGIT_ESCROW) return process.env.MERGIT_ESCROW;
   const path = new URL("../contracts/deployment.json", import.meta.url);
