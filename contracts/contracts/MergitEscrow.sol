@@ -14,8 +14,10 @@ pragma solidity 0.8.24;
 /// @dev    Decisiones de diseño deliberadas:
 ///         - Sin owner, sin pausa y sin upgradabilidad: nadie —ni el autor— puede
 ///           tocar fondos ajenos. Es el núcleo del argumento "trustless" de Mergit.
-///         - El verificador solo puede elegir *a quién* se paga, nunca desviar los
-///           fondos a sí mismo ni cambiar el importe.
+///         - El verificador solo puede elegir *a quién* se paga: no cambia el importe
+///           ni la comisión, no liquida dos veces ni pasado el plazo, y no toca un
+///           bounty ajeno. Nada le impide nombrar una dirección propia; eso lo cierran
+///           el registro on-chain y, en la v2, la ventana de objeción.
 ///         - La comisión de protocolo se fija en el constructor y es inmutable.
 contract MergitEscrow {
     // ─────────────────────────────── Tipos ───────────────────────────────
