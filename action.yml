@@ -31,8 +31,8 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: npm
-        cache-dependency-path: ${{ github.action_path }}/agent/package-lock.json
+        # Sin caché de npm: setup-node resuelve la ruta dentro del repositorio que
+        # usa la acción, y el package-lock del agente vive fuera de ahí.
 
     - name: Install the agent
       shell: bash
