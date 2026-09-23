@@ -1,0 +1,12 @@
+{
+  "network": "giwa-sepolia",
+  "chainId": 91342,
+  "contract": "MergitRegistry",
+  "address": "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c",
+  "deployer": "0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b",
+  "constructorArgs": [],
+  "txHash": "0xfda9cac0f0fdc4319113d5d7e5858797519dfe21d10a7201dae76161c5e3c306",
+  "blockNumber": 36856438,
+  "explorer": "https://sepolia-explorer.giwa.io/address/0x79d44543d20c7c6653f6626687d67d2cd7f2af9c",
+  "deployedAt": "2026-09-23T22:12:35.165Z"
+}
