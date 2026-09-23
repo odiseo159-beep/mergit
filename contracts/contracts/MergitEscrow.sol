@@ -136,8 +136,11 @@ contract MergitEscrow {
     }
 
     /// @notice El verificador libera el escrow al desarrollador que hizo el trabajo.
-    /// @dev    El verificador no puede pagarse a sí mismo ni alterar el importe:
-    ///         solo decide el destinatario, y la evidencia queda registrada.
+    /// @dev    El verificador solo decide el destinatario: no puede alterar el importe
+    ///         ni la comisión, liquidar dos veces o pasado el plazo, ni tocar un bounty
+    ///         que no le fue asignado. Nada aquí le impide nombrar una dirección propia:
+    ///         atar el pago a la wallet registrada del autor es lo que falta, y por eso
+    ///         existe el registro on-chain.
     function settle(uint256 bountyId, address developer, bytes32 evidenceHash) external nonReentrant {
         Bounty storage b = _bounties[bountyId];
 
