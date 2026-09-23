@@ -33,9 +33,15 @@ async function gh(path) {
   const res = await fetch(`${API}${path}`, { headers });
   if (res.status === 404) throw new Error(`no existe: ${path}`);
   if (res.status === 403 || res.status === 429) {
-    const reset = res.headers.get("x-ratelimit-reset");
-    const when = reset ? new Date(Number(reset) * 1000).toLocaleTimeString() : "un rato";
-    throw new Error(`GitHub cortó por límite de consultas. Se repone a las ${when}. Define GITHUB_TOKEN para subir el límite.`);
+    // Un 403 puede ser el límite de consultas o un token sin permiso. Se distinguen
+    // por el contador que queda: confundirlos manda a depurar al lugar equivocado.
+    const left = res.headers.get("x-ratelimit-remaining");
+    if (left === "0" || res.status === 429) {
+      const reset = res.headers.get("x-ratelimit-reset");
+      const when = reset ? new Date(Number(reset) * 1000).toLocaleTimeString() : "un rato";
+      throw new Error(`GitHub cortó por límite de consultas. Se repone a las ${when}. Define GITHUB_TOKEN para subir el límite.`);
+    }
+    throw new Error(`GitHub negó el permiso en ${path}. Leer el CI necesita \`checks: read\` en el workflow.`);
   }
   if (!res.ok) throw new Error(`GitHub respondió ${res.status} en ${path}`);
   return res.json();

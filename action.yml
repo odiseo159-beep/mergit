@@ -2,6 +2,11 @@ name: Mergit
 description: Pay a merged pull request from its on-chain bounty, after checking that the merge and the CI are real.
 author: Mergit
 
+# El workflow que la use necesita estos permisos:
+#   contents: read        leer el repositorio y los estados del commit
+#   checks: read          leer los check runs, que es donde vive el CI moderno
+#   pull-requests: write  comentar el recibo en el pull request
+
 branding:
   icon: git-merge
   color: red
