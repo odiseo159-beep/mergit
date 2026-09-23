@@ -48,10 +48,10 @@ repository:
           agent-key: ${{ secrets.MERGIT_AGENT_KEY }}
 ```
 
-The workflow needs three permissions: `contents: read` to read the repository,
-`checks: read` because that is where modern CI reports, and `pull-requests: write`
-to comment the receipt. Without `checks: read` GitHub answers 403 on the check runs,
-and the agent cannot tell green from missing.
+The workflow needs four permissions: `contents: read` to read the repository,
+`checks: read` and `statuses: read` because CI reports through both mechanisms, and
+`pull-requests: write` to comment the receipt. Miss either CI permission and GitHub
+answers 403, where the agent cannot tell green from missing.
 
 The action installs the agent and runs `on-event.mjs` with the right environment.
 Its `pull-request` input re-checks a single pull request by number, which is what a

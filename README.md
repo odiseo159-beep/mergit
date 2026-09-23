@@ -45,6 +45,7 @@ on:
 permissions:
   contents: read
   checks: read
+  statuses: read
   pull-requests: write
 concurrency:
   group: mergit-settle

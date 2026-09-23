@@ -5,6 +5,7 @@ author: Mergit
 # El workflow que la use necesita estos permisos:
 #   contents: read        leer el repositorio y los estados del commit
 #   checks: read          leer los check runs, que es donde vive el CI moderno
+#   statuses: read        leer los estados clásicos del commit, el otro mecanismo de CI
 #   pull-requests: write  comentar el recibo en el pull request
 
 branding:

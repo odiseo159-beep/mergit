@@ -41,7 +41,7 @@ async function gh(path) {
       const when = reset ? new Date(Number(reset) * 1000).toLocaleTimeString() : "un rato";
       throw new Error(`GitHub cortó por límite de consultas. Se repone a las ${when}. Define GITHUB_TOKEN para subir el límite.`);
     }
-    throw new Error(`GitHub negó el permiso en ${path}. Leer el CI necesita \`checks: read\` en el workflow.`);
+    throw new Error(`GitHub negó el permiso en ${path}. Leer el CI necesita \`checks: read\` y \`statuses: read\` en el workflow.`);
   }
   if (!res.ok) throw new Error(`GitHub respondió ${res.status} en ${path}`);
   return res.json();
