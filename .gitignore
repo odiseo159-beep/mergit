@@ -26,3 +26,8 @@ brand/refs/
 
 # notas internas y confidenciales (plan de la demo, correos de GIWA, calendario)
 notas/
+
+# material de marca y pruebas de diseño: aún no se decide si son públicos
+brand/
+concepts/
+.claude/
