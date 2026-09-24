@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claim your GitHub login — Mergit</title>
+<meta name="description" content="Tie your GitHub login to your wallet on GIWA Chain, with a proof anyone can check. Merged work then pays the address you claimed.">
+<link rel="canonical" href="https://www.mergit.xyz/claim">
+<meta name="theme-color" content="#0a0a0b">
+<meta property="og:title" content="Claim your GitHub login — Mergit">
+<meta property="og:description" content="Tie your GitHub login to your wallet on GIWA Chain, with a proof anyone can check.">
+<meta property="og:url" content="https://www.mergit.xyz/claim">
+<meta property="og:image" content="https://www.mergit.xyz/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Reclamar un login desde el navegador. La página comprueba la prueba contra
+   GitHub ANTES de pedir la firma: reclamar con una prueba rota solo gasta gas. */
+:root{
+  --bg:#0a0a0b; --ink:#ededf0; --mute:#8a8a93; --dim:#55555d; --line:#26262c; --red:#ff2d2d; --ok:#3ddc84;
+  --sans:"Geist",system-ui,-apple-system,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --pad:clamp(20px,4vw,72px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--red);color:#0a0a0b}
+
+.nav{display:flex;align-items:center;justify-content:space-between;padding:18px var(--pad);
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;letter-spacing:.2em;font-weight:500}
+.brand svg{width:22px;height:22px}
+.nav a:hover{color:var(--red)}
+.nav .right{display:flex;align-items:center;gap:18px;color:var(--mute)}
+
+main{max-width:1080px;margin:0 auto;padding:clamp(40px,7vh,90px) var(--pad) 90px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:12px}
+.kicker::before{content:"";width:26px;height:1px;background:var(--red)}
+h1{margin-top:20px;font-weight:800;font-size:clamp(34px,5vw,64px);line-height:1;letter-spacing:-.04em}
+h1 .r{color:var(--red)}
+.lede{margin-top:18px;max-width:62ch;color:var(--mute);font-size:clamp(15px,1.2vw,17px);line-height:1.6}
+.lede b{color:var(--ink);font-weight:500}
+
+.grid{margin-top:46px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(24px,4vw,56px);align-items:start}
+form{border:1px solid var(--line);padding:clamp(20px,3vw,32px);background:#0c0c0e}
+label{display:block;margin-top:22px;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+label:first-of-type{margin-top:0}
+input{width:100%;margin-top:8px;background:#0a0a0b;color:var(--ink);border:1px solid var(--line);
+  padding:13px 14px;font-family:var(--mono);font-size:14px;transition:border-color .2s}
+input:focus{outline:none;border-color:var(--red)}
+input:disabled{color:var(--dim)}
+.hint{margin-top:7px;font-size:12.5px;color:var(--dim);line-height:1.5}
+button{margin-top:22px;width:100%;font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  padding:16px;border:1px solid var(--red);background:var(--red);color:#0a0a0b;font-weight:500;cursor:pointer;transition:.2s}
+button:hover:not(:disabled){background:#ff4a4a}
+button:disabled{background:transparent;color:var(--dim);border-color:var(--line);cursor:not-allowed}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+button.ghost:hover:not(:disabled){border-color:var(--ink)}
+
+aside{font-family:var(--mono);font-size:13px;line-height:1.75}
+aside h2{font-family:var(--sans);font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:14px}
+.card{border:1px solid var(--line);padding:22px}
+.card+.card{margin-top:18px}
+.card p{color:var(--mute)}
+.snippet{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);color:var(--ink);word-break:break-all;font-size:12.5px}
+.snippet button{margin-top:10px;width:auto;padding:7px 11px;font-size:11px}
+
+.log{margin-top:24px;border:1px solid var(--line);padding:18px 20px;font-family:var(--mono);font-size:13px;line-height:1.8;display:none}
+.log.on{display:block}
+.log .line{color:var(--mute)}
+.log .line b{color:var(--ink);font-weight:500}
+.log .ok::before{content:"✓ ";color:var(--red)}
+.log .err{color:var(--red)}
+.log a{color:var(--mute);border-bottom:1px dotted var(--dim)}
+.log a:hover{color:var(--ink)}
+
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block}
+.dot.on{background:var(--ok)}
+
+footer{border-top:1px solid var(--line);padding:30px var(--pad);font-family:var(--mono);font-size:12px;color:var(--dim);
+  display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer a:hover{color:var(--ink)}
+@media (max-width:900px){.grid{grid-template-columns:1fr}.nav .right span{display:none}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="/">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M18 72 V24 L50 56 L82 24 V72" fill="none" stroke="#ededf0" stroke-width="12" stroke-linecap="square" stroke-linejoin="round"/><line x1="50" y1="56" x2="50" y2="92" stroke="#ff2d2d" stroke-width="12"/><circle cx="18" cy="24" r="8.5" fill="#ededf0"/><circle cx="82" cy="24" r="8.5" fill="#ededf0"/><circle cx="50" cy="56" r="12" fill="#ff2d2d"/></svg>
+    Mergit
+  </a>
+  <span class="right">
+    <span id="net"><i class="dot" id="netdot"></i> not connected</span>
+    <a href="/post">Post a bounty</a>
+    <a href="/docs">Docs</a>
+  </span>
+</nav>
+
+<main>
+  <p class="kicker">Build</p>
+  <h1>Claim your login. <span class="r">Get paid there.</span></h1>
+  <p class="lede">Say on-chain that a GitHub account is yours, and point at a proof only that account could publish. From then on, a bounty for your merged work pays <b>the wallet you claimed</b>, not an address someone else wrote in a file.</p>
+
+  <div class="grid">
+    <form id="form" autocomplete="off">
+      <label for="login">Your GitHub login</label>
+      <input id="login" placeholder="odiseo159-beep" required>
+      <p class="hint">Case does not matter: the contract lowercases it, the same way GitHub does.</p>
+
+      <label for="wallet">Wallet</label>
+      <input id="wallet" placeholder="connect to fill this in" disabled>
+      <p class="hint">Whoever signs the transaction is who claims the login. One wallet, one login.</p>
+
+      <label for="proof">Proof</label>
+      <input id="proof" placeholder="https://gist.github.com/you/abc123" required>
+      <p class="hint">A gist of yours, or a repository of yours whose README contains your address. The page checks it before asking you to sign.</p>
+
+      <button type="button" id="connect">Connect wallet</button>
+      <button type="button" id="check" disabled>Check the proof</button>
+      <button type="button" id="claim" disabled>Claim it on-chain</button>
+    </form>
+
+    <aside>
+      <div class="card">
+        <h2>Publish the proof first</h2>
+        <p>Put this line in a public gist, or in the README of the repository named after you:</p>
+        <div class="snippet" id="snippet">Connect your wallet and this line will say your address.</div>
+        <button class="ghost" id="copy" disabled>Copy the line</button>
+      </div>
+
+      <div class="card">
+        <h2>Why on-chain</h2>
+        <p>The contract cannot read GitHub, so it does not check the proof: it records the claim, its date and where the proof lives. Anyone can then re-check it, and the agent does exactly that before paying. A claim whose proof does not hold is not paid.</p>
+      </div>
+
+      <div class="card">
+        <h2>Already claimed?</h2>
+        <p>Type your login and press <b>Check the proof</b>: if the login is taken, the page tells you by whom. To move a login to another wallet, the current one releases it first.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="log" id="log"></div>
+</main>
+
+<footer>
+  <span>MERG<span style="color:var(--red)">IT</span> — Merge it. Get paid.</span>
+  <span><a href="https://github.com/odiseo159-beep/mergit">GitHub</a> · <a href="/docs">Docs</a> · <a href="https://x.com/MergitonGIWA">@MergitonGIWA</a></span>
+</footer>
+
+<script type="module">
+import { encodeFunctionData, decodeFunctionResult } from "https://esm.sh/viem@2.21.55";
+
+const CHAIN_ID = 91342;
+const EXPLORER = "https://sepolia-explorer.giwa.io";
+const RPC = "https://sepolia-rpc.giwa.io";
+const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
+const GH = "https://api.github.com";
+
+const ABI = [
+  { type: "function", name: "claim", stateMutability: "nonpayable",
+    inputs: [{ name: "login", type: "string" }, { name: "proofURI", type: "string" }],
+    outputs: [{ name: "loginHash", type: "bytes32" }] },
+  { type: "function", name: "claimOf", stateMutability: "view",
+    inputs: [{ name: "login", type: "string" }],
+    outputs: [{ type: "tuple", components: [
+      { name: "wallet", type: "address" }, { name: "claimedAt", type: "uint64" },
+      { name: "login", type: "string" }, { name: "proofURI", type: "string" }] }] },
+];
+
+const $ = (id) => document.getElementById(id);
+const hex = (n) => "0x" + BigInt(n).toString(16);
+const log = $("log");
+const say = (html, cls = "line") => {
+  log.classList.add("on");
+  const d = document.createElement("div");
+  d.className = cls; d.innerHTML = html; log.appendChild(d); return d;
+};
+
+let account = null;
+
+const GIWA = {
+  chainId: hex(CHAIN_ID), chainName: "GIWA Sepolia",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: [RPC], blockExplorerUrls: [EXPLORER],
+};
+
+async function ensureChain(eth) {
+  const current = await eth.request({ method: "eth_chainId" });
+  if (current.toLowerCase() === GIWA.chainId.toLowerCase()) return;
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: GIWA.chainId }] });
+  } catch (e) {
+    if (e.code === 4902 || e.data?.originalError?.code === 4902) {
+      await eth.request({ method: "wallet_addEthereumChain", params: [GIWA] });
+    } else throw e;
+  }
+}
+
+/** Lectura del registro sin wallet: el RPC público alcanza. */
+async function claimOf(login) {
+  const data = encodeFunctionData({ abi: ABI, functionName: "claimOf", args: [login] });
+  const res = await fetch(RPC, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: REGISTRY, data }, "latest"] }),
+  });
+  const { result, error } = await res.json();
+  if (error) throw new Error(error.message);
+  const [claim] = [decodeFunctionResult({ abi: ABI, functionName: "claimOf", data: result })];
+  return claim.wallet === "0x0000000000000000000000000000000000000000" ? null : claim;
+}
+
+/**
+ * La misma comprobación que hace el agente antes de pagar: que la publicación
+ * sea de ese login y que contenga la dirección reclamada.
+ */
+async function checkProof(login, wallet, proofURI) {
+  const want = wallet.toLowerCase();
+  const owns = (o) => o?.toLowerCase() === login.toLowerCase();
+  const get = async (path) => {
+    const r = await fetch(GH + path, { headers: { Accept: "application/vnd.github+json" } });
+    if (r.status === 404) return null;
+    if (r.status === 403) throw new Error("GitHub rate-limited this browser. Try again in a few minutes.");
+    if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+    return r.json();
+  };
+
+  const gist = proofURI.match(/^https:\/\/gist\.github\.com\/([^/]+)\/([0-9a-f]+)/i);
+  if (gist) {
+    const [, urlLogin, id] = gist;
+    if (!owns(urlLogin)) return { ok: false, reason: `that gist is not under @${login}` };
+    const data = await get(`/gists/${id}`);
+    if (!data) return { ok: false, reason: "that gist does not exist" };
+    if (!owns(data.owner?.login)) return { ok: false, reason: `that gist belongs to @${data.owner?.login}` };
+    const body = Object.values(data.files ?? {}).map((f) => f.content ?? "").join("\n");
+    if (!body.toLowerCase().includes(want)) return { ok: false, reason: "the gist does not contain your address" };
+    return { ok: true, where: `gist ${id}` };
+  }
+
+  const repo = proofURI.match(/^https:\/\/github\.com\/([^/]+)\/([^/?#]+)/i);
+  if (repo) {
+    const [, urlLogin, name] = repo;
+    if (!owns(urlLogin)) return { ok: false, reason: `that repository is not under @${login}` };
+    const readme = await get(`/repos/${urlLogin}/${name}/readme`);
+    if (!readme) return { ok: false, reason: "that repository has no README to read" };
+    const body = atob((readme.content ?? "").replace(/\n/g, ""));
+    if (!body.toLowerCase().includes(want)) return { ok: false, reason: "the README does not contain your address" };
+    return { ok: true, where: `${urlLogin}/${name} README` };
+  }
+
+  return { ok: false, reason: "the proof has to be a gist or a GitHub repository README" };
+}
+
+function snippetFor(login, wallet) {
+  return `Mergit: my GitHub account ${login || "<your-login>"} is claimed by ${wallet} on GIWA Chain.`;
+}
+
+$("connect").addEventListener("click", async () => {
+  const eth = window.ethereum;
+  if (!eth) return say("No wallet found in this browser. Install MetaMask, or any EIP-1193 wallet, and reload.", "line err");
+  try {
+    const [addr] = await eth.request({ method: "eth_requestAccounts" });
+    await ensureChain(eth);
+    account = addr;
+    $("wallet").value = addr;
+    $("netdot").classList.add("on");
+    $("net").innerHTML = `<i class="dot on"></i> ${addr.slice(0, 6)}…${addr.slice(-4)} · GIWA Sepolia`;
+    $("connect").textContent = "Wallet connected";
+    $("connect").disabled = true;
+    $("check").disabled = false;
+    $("copy").disabled = false;
+    $("snippet").textContent = snippetFor($("login").value.trim(), addr);
+  } catch (e) {
+    say(`Could not connect: ${e.shortMessage ?? e.message}`, "line err");
+  }
+});
+
+$("login").addEventListener("input", () => {
+  if (account) $("snippet").textContent = snippetFor($("login").value.trim(), account);
+});
+
+$("copy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("snippet").textContent);
+  $("copy").textContent = "Copied";
+  setTimeout(() => ($("copy").textContent = "Copy the line"), 1600);
+});
+
+$("check").addEventListener("click", async () => {
+  const login = $("login").value.trim();
+  const proof = $("proof").value.trim();
+  if (!account) return say("Connect your wallet first: the proof has to contain the address that will be paid.", "line err");
+  if (!login || !proof) return say("Fill in your login and the proof first.", "line err");
+
+  log.innerHTML = "";
+  $("claim").disabled = true;
+  try {
+    const taken = await claimOf(login);
+    if (taken && taken.wallet.toLowerCase() !== account.toLowerCase()) {
+      say(`<b>@${login}</b> is already claimed by <b>${taken.wallet}</b>. That wallet has to release it first.`, "line err");
+      return;
+    }
+    if (taken) say(`You already claimed <b>@${login}</b>. Claiming again only updates the proof.`);
+
+    const r = await checkProof(login, account, proof);
+    if (!r.ok) {
+      say(`The proof does not hold: ${r.reason}.`, "line err");
+      say(`Publish the line on the right, then check again.`);
+      return;
+    }
+    say(`Proof holds: <b>${r.where}</b> contains your address.`, "line ok");
+    say(`Now claim it on-chain. One transaction, a fraction of a cent on testnet.`);
+    $("claim").disabled = false;
+  } catch (e) {
+    say(`${e.message}`, "line err");
+  }
+});
+
+$("claim").addEventListener("click", async () => {
+  const login = $("login").value.trim();
+  const proof = $("proof").value.trim();
+  $("claim").disabled = true;
+  try {
+    const data = encodeFunctionData({ abi: ABI, functionName: "claim", args: [login, proof] });
+    const txHash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{ from: account, to: REGISTRY, data }],
+    });
+    const waiting = say(`Sent. Waiting for GIWA… <a href="${EXPLORER}/tx/${txHash}">${txHash.slice(0, 10)}…${txHash.slice(-4)}</a>`);
+
+    let receipt = null;
+    for (let i = 0; i < 60 && !receipt; i++) {
+      receipt = await window.ethereum.request({ method: "eth_getTransactionReceipt", params: [txHash] });
+      if (!receipt) await new Promise((r) => setTimeout(r, 2000));
+    }
+    if (!receipt) {
+      waiting.innerHTML = `Still pending: <a href="${EXPLORER}/tx/${txHash}">follow it here</a>`;
+      $("claim").disabled = false;
+      return;
+    }
+    if (receipt.status !== "0x1") {
+      say("The chain rejected the transaction.", "line err");
+      $("claim").disabled = false;
+      return;
+    }
+    waiting.innerHTML = `Claimed in block ${Number(receipt.blockNumber)}. <a href="${EXPLORER}/tx/${txHash}">See the transaction</a>`;
+    say(`<b>@${login}</b> now pays to <b>${account}</b>. Merged work with a bounty settles there.`, "line ok");
+  } catch (e) {
+    say(`${e.shortMessage ?? e.message}`, "line err");
+    $("claim").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
