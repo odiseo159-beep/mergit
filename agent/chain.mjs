@@ -100,7 +100,22 @@ export const ABI = [
 // La v2 añade la ventana de objeción: el pago puede quedar pendiente y hay que
 // finalizarlo después, y el financiador puede objetarlo una vez.
 export const ABI_V2 = [
-  ...ABI.filter((x) => !["postBounty", "getBounty"].includes(x.name)),
+  // El evento BountyPosted también cambió: lleva la ventana. Si se deja el de la
+  // v1, el recibo no se puede decodificar y el bounty parece no haberse creado.
+  ...ABI.filter((x) => !["postBounty", "getBounty", "BountyPosted"].includes(x.name)),
+  {
+    type: "event",
+    name: "BountyPosted",
+    inputs: [
+      { name: "bountyId", type: "uint256", indexed: true },
+      { name: "funder", type: "address", indexed: true },
+      { name: "verifier", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "deadline", type: "uint64", indexed: false },
+      { name: "challengeWindow", type: "uint32", indexed: false },
+      { name: "metadataURI", type: "string", indexed: false },
+    ],
+  },
   {
     type: "function",
     name: "postBounty",

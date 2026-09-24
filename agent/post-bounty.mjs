@@ -28,7 +28,8 @@ const days = Number(arg.value("days") ?? 7);
 const send = arg.has("send");
 
 if (!metadataURI) {
-  console.error('uso: node post-bounty.mjs --uri "<referencia del trabajo>" [--amount 0.0005] [--days 7] [--send]');
+  console.error('uso: node post-bounty.mjs --uri "<referencia del trabajo>" [--amount 0.0005] [--days 7] [--window 0] [--send]');
+  console.error('     --window son los segundos de objeción del financiador; solo la v2 del escrow los acepta.');
   process.exit(2);
 }
 
