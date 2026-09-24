@@ -225,19 +225,43 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   if (r.stage === "bounty") fail(r.reason);
 
+  // Con ventana de objeción, un pago ya aprobado solo espera a que venza.
+  if (r.stage === "pending") {
+    const faltan = r.claimableAt - Math.floor(Date.now() / 1000);
+    console.log("   el pago ya está aprobado y espera la ventana de objeción\n");
+    console.log(`   destinatario : ${r.proposedDeveloper}`);
+    console.log(`   cobrable a   : ${new Date(r.claimableAt * 1000).toISOString()}`);
+    console.log(`   faltan       : ${Math.max(0, faltan)} segundos\n`);
+    console.log("Vuelve a correr este mismo comando cuando venza, para finalizarlo.");
+    process.exit(0);
+  }
+
   console.log("3. simulando la liquidación\n");
   if (r.stage === "simulate") fail(`la cadena rechaza la transacción: ${r.reason}`);
   console.log("   la cadena acepta la transacción\n");
 
   if (r.stage === "dry-run") {
-    console.log("ensayo, no se firmó nada. Repite con --send para liquidar de verdad.");
+    console.log(`ensayo, no se firmó nada. Repite con --send para ${r.finalizing ? "finalizar el pago pendiente" : "liquidar"} de verdad.`);
     process.exit(0);
   }
 
-  console.log(`4. liquidado en el bloque ${r.block} (gas ${r.gasUsed})\n`);
+  // La v2 con ventana no paga aquí: deja el pago propuesto y objetable.
+  if (r.stage === "proposed") {
+    console.log(`4. pago propuesto en el bloque ${r.block} (gas ${r.gasUsed})\n`);
+    console.log(`   destinatario : ${developer}`);
+    console.log(`   evidencia    : ${v.evidenceHash}`);
+    console.log("\n   el financiador puede objetarlo una vez mientras corra la ventana.");
+    console.log("   pasada la ventana, este mismo comando suelta el pago.");
+    console.log(`\n${r.url}`);
+    process.exit(0);
+  }
+
+  console.log(`4. ${r.finalized ? "finalizado" : "liquidado"} en el bloque ${r.block} (gas ${r.gasUsed})\n`);
   console.log(`   pagado al desarrollador: ${formatEther(r.event.paidToDeveloper)} ETH`);
   console.log(`   comisión de protocolo  : ${formatEther(r.event.protocolFee)} ETH`);
   console.log(`   evidencia on-chain     : ${r.event.evidenceHash}`);
-  console.log(`   coincide con el paso 1 : ${r.hashMatches ? "sí" : "NO"}`);
-  console.log(`\n${r.url}`);
+  if (!r.finalized) console.log(`   coincide con el paso 1 : ${r.hashMatches ? "sí" : "NO"}`);
+  console.log(`
+${r.url}`);
+
 }
