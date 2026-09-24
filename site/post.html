@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Post a bounty — Mergit</title>
+<meta name="description" content="Lock a developer bounty on GIWA Chain from your own wallet. The agent pays it when the pull request is merged and its tests pass.">
+<link rel="canonical" href="https://www.mergit.xyz/post">
+<meta name="theme-color" content="#0a0a0b">
+<meta property="og:title" content="Post a bounty — Mergit">
+<meta property="og:description" content="Lock a developer bounty on GIWA Chain from your own wallet.">
+<meta property="og:url" content="https://www.mergit.xyz/post">
+<meta property="og:image" content="https://www.mergit.xyz/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ────────────────────────────────────────────────────────────
+   Publicar un bounty desde el navegador. La página no guarda nada
+   ni tiene servidor: arma la transacción y la firma la wallet del
+   financiador. Mergit nunca toca el dinero.
+   ──────────────────────────────────────────────────────────── */
+:root{
+  --bg:#0a0a0b; --ink:#ededf0; --mute:#8a8a93; --dim:#55555d; --line:#26262c; --red:#ff2d2d;
+  --ok:#3ddc84;
+  --sans:"Geist",system-ui,-apple-system,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --pad:clamp(20px,4vw,72px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--red);color:#0a0a0b}
+
+.nav{display:flex;align-items:center;justify-content:space-between;padding:18px var(--pad);
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;letter-spacing:.2em;font-weight:500}
+.brand svg{width:22px;height:22px}
+.nav a:hover{color:var(--red)}
+.nav .right{display:flex;align-items:center;gap:18px;color:var(--mute)}
+
+main{max-width:1080px;margin:0 auto;padding:clamp(40px,7vh,90px) var(--pad) 90px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:12px}
+.kicker::before{content:"";width:26px;height:1px;background:var(--red)}
+h1{margin-top:20px;font-weight:800;font-size:clamp(34px,5vw,64px);line-height:1;letter-spacing:-.04em}
+h1 .r{color:var(--red)}
+.lede{margin-top:18px;max-width:60ch;color:var(--mute);font-size:clamp(15px,1.2vw,17px);line-height:1.6}
+.lede b{color:var(--ink);font-weight:500}
+
+.grid{margin-top:46px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(24px,4vw,56px);align-items:start}
+form{border:1px solid var(--line);padding:clamp(20px,3vw,32px);background:#0c0c0e}
+label{display:block;margin-top:22px;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+label:first-of-type{margin-top:0}
+input,select{width:100%;margin-top:8px;background:#0a0a0b;color:var(--ink);border:1px solid var(--line);
+  padding:13px 14px;font-family:var(--mono);font-size:14px;transition:border-color .2s}
+input:focus,select:focus{outline:none;border-color:var(--red)}
+.hint{margin-top:7px;font-size:12.5px;color:var(--dim);line-height:1.5}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+button{margin-top:28px;width:100%;font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  padding:16px;border:1px solid var(--red);background:var(--red);color:#0a0a0b;font-weight:500;cursor:pointer;transition:.2s}
+button:hover:not(:disabled){background:#ff4a4a}
+button:disabled{background:transparent;color:var(--dim);border-color:var(--line);cursor:not-allowed}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+button.ghost:hover:not(:disabled){border-color:var(--ink);background:transparent}
+
+aside{font-family:var(--mono);font-size:13px;line-height:1.75}
+aside h2{font-family:var(--sans);font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:14px}
+.card{border:1px solid var(--line);padding:22px}
+.card+.card{margin-top:18px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;color:var(--mute)}
+.kv b{color:var(--ink);font-weight:500}
+.kv a{color:var(--mute);border-bottom:1px dotted var(--dim)}
+.kv a:hover{color:var(--ink)}
+.steps{list-style:none;color:var(--mute)}
+.steps li{position:relative;padding-left:26px;margin-top:10px}
+.steps li::before{counter-increment:s;content:counter(s,decimal-leading-zero);position:absolute;left:0;color:var(--red)}
+.steps{counter-reset:s}
+.steps b{color:var(--ink);font-weight:500}
+
+.log{margin-top:24px;border:1px solid var(--line);padding:18px 20px;font-family:var(--mono);font-size:13px;line-height:1.8;display:none}
+.log.on{display:block}
+.log .line{color:var(--mute)}
+.log .line b{color:var(--ink);font-weight:500}
+.log .ok::before{content:"✓ ";color:var(--red)}
+.log .err{color:var(--red)}
+.log a{color:var(--mute);border-bottom:1px dotted var(--dim)}
+.log a:hover{color:var(--ink)}
+.paste{margin-top:14px;padding:12px 14px;border:1px dashed var(--red);color:var(--ink);display:flex;justify-content:space-between;gap:14px;align-items:center}
+.paste code{font-family:var(--mono)}
+.paste button{margin:0;width:auto;padding:8px 12px;font-size:11px}
+
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block}
+.dot.on{background:var(--ok)}
+
+footer{border-top:1px solid var(--line);padding:30px var(--pad);font-family:var(--mono);font-size:12px;color:var(--dim);
+  display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer a:hover{color:var(--ink)}
+
+@media (max-width:900px){.grid{grid-template-columns:1fr}.nav .right span{display:none}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="/">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M18 72 V24 L50 56 L82 24 V72" fill="none" stroke="#ededf0" stroke-width="12" stroke-linecap="square" stroke-linejoin="round"/><line x1="50" y1="56" x2="50" y2="92" stroke="#ff2d2d" stroke-width="12"/><circle cx="18" cy="24" r="8.5" fill="#ededf0"/><circle cx="82" cy="24" r="8.5" fill="#ededf0"/><circle cx="50" cy="56" r="12" fill="#ff2d2d"/></svg>
+    Mergit
+  </a>
+  <span class="right">
+    <span id="net"><i class="dot" id="netdot"></i> not connected</span>
+    <a href="/docs">Docs</a>
+    <a href="/">Home</a>
+  </span>
+</nav>
+
+<main>
+  <p class="kicker">Fund</p>
+  <h1>Lock a bounty. <span class="r">Pay on merge.</span></h1>
+  <p class="lede">Your wallet signs, the contract holds the money, and the agent releases it when the pull request is <b>merged</b> with its <b>tests passing</b>. This page has no server and never touches your funds: it builds the transaction and hands it to your wallet.</p>
+
+  <div class="grid">
+    <form id="form" autocomplete="off">
+      <label for="uri">What the bounty is for</label>
+      <input id="uri" name="uri" placeholder="https://github.com/owner/repo/issues/7" required>
+      <p class="hint">An issue, a pull request or a repository. It is written into the bounty, on-chain, so anyone can see what was asked for.</p>
+
+      <div class="row">
+        <div>
+          <label for="amount">Amount, in ETH</label>
+          <input id="amount" name="amount" inputmode="decimal" value="0.0005" required>
+        </div>
+        <div>
+          <label for="days">Deadline, in days</label>
+          <input id="days" name="days" inputmode="numeric" value="7" required>
+        </div>
+      </div>
+      <p class="hint">After the deadline, and only if nobody was paid, you can refund yourself.</p>
+
+      <label for="escrow">Escrow</label>
+      <select id="escrow" name="escrow">
+        <option value="v1">Instant — pays in the same block as the verification</option>
+        <option value="v2">With a challenge window — you can object once before the money leaves</option>
+      </select>
+
+      <div id="windowbox" style="display:none">
+        <label for="window">Challenge window, in hours</label>
+        <input id="window" name="window" inputmode="numeric" value="24">
+        <p class="hint">Up to 7 days. During that time you can object once, and the bounty reopens.</p>
+      </div>
+
+      <label for="verifier">Verifier</label>
+      <input id="verifier" name="verifier" value="0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b">
+      <p class="hint">The agent allowed to release this bounty. Its only power is naming who gets paid.</p>
+
+      <button type="button" id="connect">Connect wallet</button>
+      <button type="submit" id="submit" disabled>Lock the bounty</button>
+    </form>
+
+    <aside>
+      <div class="card">
+        <h2>After you post it</h2>
+        <ol class="steps">
+          <li>Put <b>Bounty: #N</b> in the pull request description, with the number this page gives you.</li>
+          <li>The repository needs <b>mergit.json</b> with the author's wallet, or the author claims their GitHub login on-chain.</li>
+          <li>Add the <b>Mergit action</b> to the repository. One step in a workflow.</li>
+          <li>Merge with CI green. The escrow pays.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>Where this runs</h2>
+        <div class="kv">
+          <span>Network</span><b>GIWA Sepolia · 91342</b>
+          <span>Escrow v1</span><a id="lk1" href="#">0xffcf…5879</a>
+          <span>Escrow v2</span><a id="lk2" href="#">0x48d5…2ad5</a>
+          <span>Registry</span><a id="lk3" href="#">0x79d4…af9c</a>
+          <span>Protocol fee</span><b>1.5%, capped at 5% in code</b>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Testnet</h2>
+        <p style="color:var(--mute)">This is GIWA Sepolia: the ETH is not real. Get some from <a href="https://faucet.giwa.io" style="border-bottom:1px dotted var(--dim)">faucet.giwa.io</a> and the network will be added to your wallet when you connect.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="log" id="log"></div>
+</main>
+
+<footer>
+  <span>MERG<span style="color:var(--red)">IT</span> — Merge it. Get paid.</span>
+  <span><a href="https://github.com/odiseo159-beep/mergit">GitHub</a> · <a href="/docs">Docs</a> · <a href="https://x.com/MergitonGIWA">@MergitonGIWA</a></span>
+</footer>
+
+<script type="module">
+import { encodeFunctionData, parseEther, decodeEventLog, formatEther } from "https://esm.sh/viem@2.21.55";
+
+const CHAIN_ID = 91342;
+const EXPLORER = "https://sepolia-explorer.giwa.io";
+const ESCROW = {
+  v1: "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879",
+  v2: "0x48d506080abdbed11f1acbe40f799301d9612ad5",
+};
+const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
+
+const ABI_V1 = [
+  { type: "function", name: "postBounty", stateMutability: "payable",
+    inputs: [{ name: "verifier", type: "address" }, { name: "deadline", type: "uint64" }, { name: "metadataURI", type: "string" }],
+    outputs: [{ name: "bountyId", type: "uint256" }] },
+  { type: "event", name: "BountyPosted",
+    inputs: [{ name: "bountyId", type: "uint256", indexed: true }, { name: "funder", type: "address", indexed: true },
+             { name: "verifier", type: "address", indexed: true }, { name: "amount", type: "uint256" },
+             { name: "deadline", type: "uint64" }, { name: "metadataURI", type: "string" }] },
+];
+const ABI_V2 = [
+  { type: "function", name: "postBounty", stateMutability: "payable",
+    inputs: [{ name: "verifier", type: "address" }, { name: "deadline", type: "uint64" },
+             { name: "challengeWindow", type: "uint32" }, { name: "metadataURI", type: "string" }],
+    outputs: [{ name: "bountyId", type: "uint256" }] },
+  { type: "event", name: "BountyPosted",
+    inputs: [{ name: "bountyId", type: "uint256", indexed: true }, { name: "funder", type: "address", indexed: true },
+             { name: "verifier", type: "address", indexed: true }, { name: "amount", type: "uint256" },
+             { name: "deadline", type: "uint64" }, { name: "challengeWindow", type: "uint32" }, { name: "metadataURI", type: "string" }] },
+];
+
+const $ = (id) => document.getElementById(id);
+const hex = (n) => "0x" + BigInt(n).toString(16);
+$("lk1").href = `${EXPLORER}/address/${ESCROW.v1}`;
+$("lk2").href = `${EXPLORER}/address/${ESCROW.v2}`;
+$("lk3").href = `${EXPLORER}/address/${REGISTRY}`;
+
+const log = $("log");
+const say = (html, cls = "line") => {
+  log.classList.add("on");
+  const d = document.createElement("div");
+  d.className = cls;
+  d.innerHTML = html;
+  log.appendChild(d);
+  return d;
+};
+
+let account = null;
+
+$("escrow").addEventListener("change", (e) => {
+  $("windowbox").style.display = e.target.value === "v2" ? "block" : "none";
+});
+
+/** GIWA Sepolia, para que la wallet la agregue si no la tiene. */
+const GIWA = {
+  chainId: hex(CHAIN_ID),
+  chainName: "GIWA Sepolia",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: ["https://sepolia-rpc.giwa.io"],
+  blockExplorerUrls: [EXPLORER],
+};
+
+async function ensureChain(eth) {
+  const current = await eth.request({ method: "eth_chainId" });
+  if (current.toLowerCase() === GIWA.chainId.toLowerCase()) return;
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: GIWA.chainId }] });
+  } catch (e) {
+    // 4902: la wallet no conoce la red todavía
+    if (e.code === 4902 || e.data?.originalError?.code === 4902) {
+      await eth.request({ method: "wallet_addEthereumChain", params: [GIWA] });
+    } else throw e;
+  }
+}
+
+$("connect").addEventListener("click", async () => {
+  const eth = window.ethereum;
+  if (!eth) {
+    say("No wallet found in this browser. Install MetaMask, or any EIP-1193 wallet, and reload.", "line err");
+    return;
+  }
+  try {
+    const [addr] = await eth.request({ method: "eth_requestAccounts" });
+    await ensureChain(eth);
+    account = addr;
+    $("netdot").classList.add("on");
+    $("net").innerHTML = `<i class="dot on"></i> ${addr.slice(0, 6)}…${addr.slice(-4)} · GIWA Sepolia`;
+    $("connect").textContent = "Wallet connected";
+    $("connect").disabled = true;
+    $("submit").disabled = false;
+  } catch (e) {
+    say(`Could not connect: ${e.shortMessage ?? e.message}`, "line err");
+  }
+});
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!account) return;
+
+  const uri = $("uri").value.trim();
+  const version = $("escrow").value;
+  const address = ESCROW[version];
+  const abi = version === "v2" ? ABI_V2 : ABI_V1;
+
+  let value, deadline, windowSeconds;
+  try {
+    value = parseEther($("amount").value.trim());
+    const days = Number($("days").value);
+    if (!Number.isFinite(days) || days <= 0) throw new Error("the deadline must be a number of days");
+    deadline = BigInt(Math.floor(Date.now() / 1000) + Math.round(days * 86400));
+    windowSeconds = version === "v2" ? Math.round(Number($("window").value || 0) * 3600) : 0;
+    if (windowSeconds > 7 * 86400) throw new Error("the challenge window cannot be longer than 7 days");
+  } catch (err) {
+    say(`${err.message}`, "line err");
+    return;
+  }
+
+  const args = version === "v2"
+    ? [$("verifier").value.trim(), deadline, windowSeconds, uri]
+    : [$("verifier").value.trim(), deadline, uri];
+
+  log.innerHTML = "";
+  say(`Locking <b>${$("amount").value} ETH</b> in the ${version === "v2" ? "escrow with a challenge window" : "instant escrow"}…`);
+  $("submit").disabled = true;
+
+  try {
+    const data = encodeFunctionData({ abi, functionName: "postBounty", args });
+    const txHash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{ from: account, to: address, value: hex(value), data }],
+    });
+    const waiting = say(`Sent. Waiting for GIWA to include it… <a href="${EXPLORER}/tx/${txHash}">${txHash.slice(0, 10)}…${txHash.slice(-4)}</a>`);
+
+    // Esperamos el recibo sin librerías: la cadena hace bloques cada pocos segundos.
+    let receipt = null;
+    for (let i = 0; i < 60 && !receipt; i++) {
+      receipt = await window.ethereum.request({ method: "eth_getTransactionReceipt", params: [txHash] });
+      if (!receipt) await new Promise((r) => setTimeout(r, 2000));
+    }
+    if (!receipt) {
+      waiting.innerHTML = `Still pending. Follow it here: <a href="${EXPLORER}/tx/${txHash}">${txHash.slice(0, 10)}…${txHash.slice(-4)}</a>`;
+      $("submit").disabled = false;
+      return;
+    }
+    if (receipt.status !== "0x1") {
+      say("The chain rejected the transaction.", "line err");
+      $("submit").disabled = false;
+      return;
+    }
+
+    let id = null, amount = null;
+    for (const lg of receipt.logs) {
+      try {
+        const ev = decodeEventLog({ abi, data: lg.data, topics: lg.topics });
+        if (ev.eventName === "BountyPosted") { id = ev.args.bountyId; amount = ev.args.amount; }
+      } catch { /* un log ajeno en el mismo recibo */ }
+    }
+
+    waiting.innerHTML = `Mined in block ${Number(receipt.blockNumber)}. <a href="${EXPLORER}/tx/${txHash}">See the transaction</a>`;
+    if (id !== null) {
+      say(`Bounty <b>#${id}</b> is open with <b>${formatEther(amount)} ETH</b> locked.`, "line ok");
+      const box = document.createElement("div");
+      box.className = "paste";
+      box.innerHTML = `<span>Put this line in the pull request: <code>Bounty: #${id}</code></span>`;
+      const copy = document.createElement("button");
+      copy.textContent = "copy";
+      copy.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(`Bounty: #${id}`);
+        copy.textContent = "copied";
+      });
+      box.appendChild(copy);
+      log.appendChild(box);
+    }
+  } catch (err) {
+    say(`${err.shortMessage ?? err.message}`, "line err");
+  } finally {
+    $("submit").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
