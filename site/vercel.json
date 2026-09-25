@@ -19,7 +19,7 @@
   "rewrites": [
     {
       "source": "/p/:login",
-      "destination": "/p.html?login=:login"
+      "destination": "/p?login=:login"
     }
   ]
 }
