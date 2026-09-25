@@ -690,10 +690,10 @@ footer .honest a:hover{color:var(--ink)}
     settlements in July exercised the contract before the agent existed and are not shown above.
     The verifier's only power is naming who receives a bounty it was assigned: it cannot change the
     amount, settle twice or after the deadline, or touch a bounty it was not assigned. The agent pays
-    the wallet the repository registered for the pull request's author, but the contract itself would
-    accept any address, so that registry is the part still to move on-chain. Everything shown on this
-    page is read from the chain, and the evidence hash of each payment is recomputable from the public
-    pull request by anyone.
+    the wallet the pull request's author claimed on-chain, against a proof it re-checks on GitHub
+    before releasing anything, and a bounty can carry a challenge window during which its funder may
+    object once. Everything shown on this page is read from the chain, and the evidence hash of each
+    payment is recomputable from the public pull request by anyone.
   </p>
 </footer>
 
