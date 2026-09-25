@@ -351,6 +351,7 @@ footer .honest a:hover{color:var(--ink)}
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="/post">Post a bounty</a></li>
     <li><a href="/claim">Claim your login</a></li>
+    <li><a href="/p/odiseo159-beep">Builder record</a></li>
   </ul>
   <a class="ghost" href="/docs">Tech docs</a>
 </nav>
@@ -597,10 +598,10 @@ footer .honest a:hover{color:var(--ink)}
         <circle class="rpulse" style="--d:1.1s" cx="90" cy="180" r="14"/>
         <circle class="rnode now" style="--d:1.1s" cx="90" cy="180" r="14"/>
         <text class="rlbl r" style="--d:1.2s" x="122" y="178"><tspan class="t">Now · pay on merge</tspan></text>
-        <text class="rlbl" style="--d:1.25s" x="122" y="197">the merge pays on its own</text>
+        <text class="rlbl" style="--d:1.25s" x="122" y="197">identity on-chain, challenge window</text>
 
         <circle class="rnode next" style="--d:1.9s" cx="90" cy="320" r="10"/>
-        <text class="rlbl" style="--d:2s" x="122" y="325"><tspan class="t">Next</tspan> · GitHub App, on-chain registry</text>
+        <text class="rlbl" style="--d:2s" x="122" y="325"><tspan class="t">Next</tspan> · a GitHub App, repos that are not ours</text>
 
         <circle class="rnode next" style="--d:2.4s" cx="90" cy="460" r="10"/>
         <text class="rlbl" style="--d:2.5s" x="122" y="465"><tspan class="t">Then</tspan> · builder reputation</text>
@@ -618,15 +619,17 @@ footer .honest a:hover{color:var(--ink)}
           <li>MergitEscrow deployed and source-verified on GIWA Sepolia.</li>
           <li>Agent v1: merged plus CI green on the head commit, evidence hashed into the payment.</li>
           <li>The agent runs inside GitHub Actions on every merge, and comments the receipt on the pull request.</li>
-          <li>The payout goes to the wallet the repository registered for the author.</li>
+          <li>Developers claim their GitHub login on-chain, with a proof the agent re-checks before it pays.</li>
+          <li>A second escrow adds an opt-in challenge window, per bounty, deployed and verified.</li>
+          <li>Bounties are funded and logins claimed from the browser, and every builder has a public record.</li>
         </ul>
       </div>
       <div class="phase">
         <p class="h"><b>Next</b> · the protocol</p>
         <h3>One click, and fewer things to trust</h3>
         <ul>
-          <li>A GitHub App any repository can install.</li>
-          <li>The wallet registry moves on-chain, with a challenge window before a payout is final.</li>
+          <li>A GitHub App any repository can install, instead of a workflow file.</li>
+          <li>Repositories that are not ours, funded by protocols that are not us.</li>
           <li>Independent verifiers, a bounty board, stablecoin payouts, mainnet.</li>
         </ul>
       </div>
@@ -635,7 +638,7 @@ footer .honest a:hover{color:var(--ink)}
         <h3>A record of work that cannot be farmed</h3>
         <ul>
           <li>Every settlement becomes a verified record of real, merged, tested work.</li>
-          <li>Builder profiles and a GIWA leaderboard, ranked by work that was actually paid.</li>
+          <li>Builder profiles and a GIWA leaderboard, ranked by work that was actually paid. The first cut is live at <a href="/p/odiseo159-beep">/p</a>.</li>
           <li>Ecosystem rewards without applications.</li>
         </ul>
       </div>
@@ -660,6 +663,7 @@ footer .honest a:hover{color:var(--ink)}
     <div class="cta">
       <a class="btn primary" href="/post">Post a bounty</a>
       <a class="btn" href="/claim">Claim your login</a>
+      <a class="btn" href="/p/odiseo159-beep">Builder record</a>
       <a class="btn" href="https://github.com/odiseo159-beep/mergit">The code ↗</a>
       <a class="btn" href="/docs">Tech docs</a>
       <a class="btn" href="https://x.com/MergitonGIWA">@MergitonGIWA ↗</a>
