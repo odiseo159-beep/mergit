@@ -317,7 +317,9 @@
       <li><b>The verifier's power is bounded to one choice.</b> It selects the recipient. It cannot
         change the amount, settle twice, settle after the deadline, or touch a bounty it was not
         assigned. The contract does not stop it from naming an address it controls: that choice is
-        the trust the next phase removes.</li>
+        the trust the next phase removes. Two pieces already narrow it: the payout resolves through
+        the <a href="https://sepolia-explorer.giwa.io/address/0x79d44543d20c7c6653f6626687d67d2cd7f2af9c">on-chain registry</a>,
+        against a proof re-checked on GitHub, and a bounty can carry a challenge window.</li>
       <li><b>The fee is immutable</b>, set in the constructor and hard-capped at 5%
         (<code>MAX_FEE_BPS</code>) in code, so it cannot be raised on existing escrows.</li>
       <li><b>Funds are always claimable.</b> Every bounty terminates in either a payout or a refund;
@@ -357,8 +359,8 @@
           <td>Name the wrong recipient; detectable after the fact, not preventable</td>
         </tr>
         <tr>
-          <td><b>Phase 2</b></td>
-          <td><b>Optimistic challenge window</b> — settlement queues for N hours; the funder can veto before funds move</td>
+          <td><b>Phase 2</b> <span style="color:var(--green)">shipped</span></td>
+          <td><b>Optimistic challenge window</b> — settlement queues for the window the funder chose; the funder can object once before funds move. <a href="https://sepolia-explorer.giwa.io/address/0x48d506080abdbed11f1acbe40f799301d9612ad5">Deployed and verified</a></td>
           <td>Nothing silently: any bad verdict is vetoable by the party who put up the money</td>
         </tr>
         <tr>
@@ -404,7 +406,7 @@
       <table>
         <tr><th style="width:26%">Phase</th><th style="width:16%">Status</th><th>Deliverable</th></tr>
         <tr><td><b>1 · Screening</b></td><td><span style="color:var(--green)">done</span></td><td>Escrow deployed and verified on GIWA Sepolia; lifecycle settled on-chain; product walkthrough live</td></tr>
-        <tr><td><b>2 · Testnet MVP</b></td><td>in progress</td><td>Verification agent v1 running against real repositories <span style="color:var(--green)">done</span>; webhook so the merge triggers it, challenge window, bounty board</td></tr>
+        <tr><td><b>2 · Testnet MVP</b></td><td>in progress</td><td>Agent v1 against real repositories, the merge triggering it from GitHub Actions, a reusable action, an on-chain identity registry, a challenge window, and funding or claiming from the browser <span style="color:var(--green)">done</span>; a GitHub App and a bounty board next</td></tr>
         <tr><td><b>3 · Mainnet</b></td><td>planned</td><td>Stablecoin payouts, first partner protocols posting live bounties, fee switch on</td></tr>
         <tr><td><b>Demoday · KBW</b></td><td>scheduled</td><td>Merge a pull request on stage; payment lands in seconds</td></tr>
         <tr><td><b>Beyond</b></td><td>—</td><td>Automated retroactive funding pools; builder reputation graph derived from verified work</td></tr>
