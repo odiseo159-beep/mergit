@@ -144,7 +144,7 @@ footer a:hover{color:var(--ink)}
 
   <section id="paid-sec">
     <h2>What the work was paid</h2>
-    <p>Every row is a bounty an agent settled to this wallet after the pull request was merged and its CI was green. The evidence hash on each payment can be recomputed from the pull request by anyone.</p>
+    <p>Every row is a bounty an agent settled to this wallet after the pull request was merged and its CI was green. The evidence hash on each payment can be recomputed from the pull request by anyone. <b>A bounty somebody funded for themselves is marked as such and does not count</b>: a record of work is only worth what somebody else paid for it.</p>
     <div id="paid-out"></div>
     <p class="note" id="paid-note"></p>
   </section>
@@ -264,6 +264,7 @@ async function logsOf(address) {
 
 function tagFor(state) {
   if (state === "paid") return '<span class="tag good"><i></i>Paid</span>';
+  if (state === "self") return '<span class="tag"><i></i>Self-funded</span>';
   if (state === "pending") return '<span class="tag wait"><i></i>Pending</span>';
   return '<span class="tag bad"><i></i>Unknown</span>';
 }
@@ -360,11 +361,17 @@ async function load() {
     try {
       const events = await logsOf(address);
       reached++;
+      // Quién puso el dinero de cada bounty. Sin esto, cualquiera puede financiar
+      // un bounty, pagárselo a sí mismo y aparecer aquí como si hubiera cobrado
+      // por trabajo ajeno. Es exactamente la farmeada que este expediente niega.
+      const funders = new Map();
+      for (const e of events) if (e.kind === "BountyPosted") funders.set(String(e.bountyId), (e.funder ?? "").toLowerCase());
       for (const e of events) {
         if (e.developer?.toLowerCase() !== want) continue;
         if (Number(e.bountyId) < from) continue;
-        if (e.kind === "BountySettled") paid.push({ ...e, v, state: "paid" });
-        if (e.kind === "SettlementProposed") pending.push({ ...e, v, state: "pending" });
+        const self = funders.get(String(e.bountyId)) === want;
+        if (e.kind === "BountySettled") paid.push({ ...e, v, self, state: self ? "self" : "paid" });
+        if (e.kind === "SettlementProposed") pending.push({ ...e, v, self, state: "pending" });
       }
     } catch {
       // un escrow que no responde no puede inventar un pago: se cuenta como no leído
@@ -378,14 +385,21 @@ async function load() {
   stillPending.sort((a, b) => Number(b.block) - Number(a.block));
   renderPayments(claim.wallet, paid, stillPending);
 
-  const total = paid.reduce((n, e) => n + BigInt(e.paidToDeveloper ?? 0n), 0n);
+  // El titular solo cuenta lo que pagó otro. Lo que alguien se paga a sí mismo
+  // se muestra, porque está en la cadena, pero no suma a su historial.
+  const earned = paid.filter((e) => !e.self);
+  const selfFunded = paid.length - earned.length;
+  const total = earned.reduce((n, e) => n + BigInt(e.paidToDeveloper ?? 0n), 0n);
   $("stats").hidden = false;
   $("s-total").textContent = total ? `${eth(total)}` : "0";
   $("s-total-sub").textContent = "ETH on GIWA Sepolia";
-  $("s-count").textContent = String(paid.length);
-  $("s-count-sub").textContent = stillPending.length ? `${stillPending.length} waiting out a challenge window` : "verified by the agent";
+  $("s-count").textContent = String(earned.length);
+  $("s-count-sub").textContent = [
+    stillPending.length ? `${stillPending.length} waiting out a challenge window` : "",
+    selfFunded ? `${selfFunded} self-funded, not counted` : "",
+  ].filter(Boolean).join(" · ") || "paid by somebody else";
   $("s-since").textContent = day(new Date(Number(claim.claimedAt) * 1000).toISOString());
-  $("s-since-sub").textContent = proof.ok ? "proof holds right now" : "proof does not check out";
+  $("s-since-sub").textContent = proof.ok ? "proof holds right now" : proof.error ? "proof not checked just now" : "proof does not check out";
 
   $("src").textContent = reached === ESCROWS.length ? "read from the chain" : "partially read";
   $("paid-note").textContent = reached === ESCROWS.length
