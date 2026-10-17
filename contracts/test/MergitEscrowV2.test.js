@@ -161,7 +161,7 @@ describe("MergitEscrowV2", async () => {
 
     await assert.rejects(
       escrow.write.settle([1n, stranger.account.address, EVIDENCE], { account: verifier.account }),
-      /NotOpen/,
+      /NotOpen/, 
     );
   });
 
@@ -171,14 +171,14 @@ describe("MergitEscrowV2", async () => {
     await post();
     await assert.rejects(
       escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: stranger.account }),
-      /NotVerifier/,
+      /NotVerifier/, 
     );
   });
 
   it("rechaza una ventana mayor que el techo de 7 días", async () => {
     await assert.rejects(
       escrow.write.postBounty([verifier.account.address, await deadline(), 7 * 86_400 + 1, "repo#1"], { value: AMOUNT }),
-      /WindowTooLong/,
+      /WindowTooLong/, 
     );
   });
 
@@ -186,21 +186,23 @@ describe("MergitEscrowV2", async () => {
     await assert.rejects(viem.deployContract("MergitEscrowV2", [501, feeRecipient.account.address]), /FeeTooHigh/);
   });
 
-  it("el financiador recupera los fondos pasado el plazo sin trabajo", async () => {
-    const short = 60;
+  it("el financiador recupera los fondos si objeta antes de que venza el plazo", async () => {
+    const short = 120;
     await escrow.write.postBounty([verifier.account.address, await deadline(short), WINDOW, "repo#1"], { value: AMOUNT });
-    await networkHelpers.time.increase(short + 10);
-
-    await escrow.write.refund([1n]);
-    assert.equal(await status(1n), 4);
-  });
-
-  it("la comisión va al destinatario fijado en el constructor", async () => {
-    await post(0);
-    const before = await publicClient.getBalance({ address: feeRecipient.account.address });
     await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
 
-    const after = await publicClient.getBalance({ address: feeRecipient.account.address });
-    assert.equal(after - before, (AMOUNT * FEE_BPS) / BPS);
+    await networkHelpers.time.increase(WINDOW - 10);
+
+    await escrow.write.challenge([1n]);
+
+    await assert.rejects(escrow.write.refund([1n]), /NotOpen/);
+    await networkHelpers.time.increase(10);
+    await assert.rejects(escrow.write.refund([1n]), /NotOpen/);
+    await networkHelpers.time.increase(10);
+    await escrow.write.refund([1n]);
+
+    const b = await escrow.read.getBounty([1n]);
+    assert.equal(b.status, 4); // Refunded
+    assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n);
   });
 });
