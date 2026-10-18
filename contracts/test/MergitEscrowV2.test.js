@@ -203,4 +203,72 @@ describe("MergitEscrowV2", async () => {
     const after = await publicClient.getBalance({ address: feeRecipient.account.address });
     assert.equal(after - before, (AMOUNT * FEE_BPS) / BPS);
   });
+
+  // ── carrera entre objeción y reembolso (Issue #1) ─────────────
+
+  it("carrera: si el financiador objeta al borde del plazo, puede reembolsarse antes de reliquidar", async () => {
+    // Bounty con plazo corto (120s) y ventana de objeción que lo cubre (180s)
+    const shortDeadline = 120;
+    const window = 180;
+    await escrow.write.postBounty(
+      [verifier.account.address, await deadline(shortDeadline), window, "repo#1"],
+      { value: AMOUNT },
+    );
+
+    // 1. El verificador propone la liquidación: queda pendiente
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    assert.equal(await status(1n), 2); // Pending
+
+    // 2. El tiempo avanza casi hasta el vencimiento del plazo (100s de 120s), dentro de la ventana de objeción
+    await networkHelpers.time.increase(100);
+
+    // 3. El financiador objeta al borde del plazo: el bounty vuelve a estar Open con challenged = true
+    await escrow.write.challenge([1n], { account: funder.account });
+    assert.equal(await status(1n), 1); // Open
+    const bChallenged = await escrow.read.getBounty([1n]);
+    assert.equal(bChallenged.challenged, true);
+
+    // 4. El tiempo pasa el deadline original (25s más -> 125s > 120s)
+    await networkHelpers.time.increase(25);
+
+    // 5. El financiador gana la carrera: pide el reembolso en cuanto vence el plazo
+    const beforeFunder = await publicClient.getBalance({ address: funder.account.address });
+    await escrow.write.refund([1n], { account: funder.account });
+    assert.equal(await status(1n), 4); // Refunded
+    const afterFunder = await publicClient.getBalance({ address: funder.account.address });
+    assert.ok(afterFunder > beforeFunder);
+
+    // 6. El verificador intenta volver a liquidar, pero ya es imposible (revierte por NotOpen)
+    await assert.rejects(
+      escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+      /NotOpen/,
+    );
+  });
+
+  it("si el plazo vence tras la objeción y nadie reembolsa aún, el verificador no puede liquidar por DeadlinePassed", async () => {
+    const shortDeadline = 120;
+    const window = 180;
+    await escrow.write.postBounty(
+      [verifier.account.address, await deadline(shortDeadline), window, "repo#1"],
+      { value: AMOUNT },
+    );
+
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await networkHelpers.time.increase(100);
+    await escrow.write.challenge([1n], { account: funder.account });
+
+    // Pasa el plazo
+    await networkHelpers.time.increase(25);
+
+    // Si el verificador intenta liquidar antes del reembolso, revierte por plazo vencido
+    await assert.rejects(
+      escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+      /DeadlinePassed/,
+    );
+
+    // El financiador aún puede cobrar su reembolso
+    await escrow.write.refund([1n], { account: funder.account });
+    assert.equal(await status(1n), 4);
+  });
 });
+
