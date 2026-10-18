@@ -203,4 +203,138 @@ describe("MergitEscrowV2", async () => {
     const after = await publicClient.getBalance({ address: feeRecipient.account.address });
     assert.equal(after - before, (AMOUNT * FEE_BPS) / BPS);
   });
+
+  // ── la carrera entre objetar y reembolsar ─────────────────────
+  //
+  // La cabecera del contrato admite que, si el financiador objeta con el plazo
+  // casi vencido, puede reembolsarse antes de que el verificador vuelva a
+  // liquidar. Estos tests documentan lo que pasa de verdad, bloque a bloque.
+  //
+  // Lo que fija el resultado:
+  //   - settle exige block.timestamp <= deadline
+  //   - refund exige block.timestamp >  deadline
+  //   - challenge solo mira claimableAt, no el deadline
+  // Con la liquidación a 100 s del plazo y una ventana de una hora, claimableAt
+  // cae 3500 s después del deadline.
+
+  describe("carrera entre objetar y reembolsar", () => {
+    const ANTES_DEL_PLAZO = 100;
+    let plazo;
+
+    // mina la siguiente transacción exactamente en `ts` y devuelve su recibo
+    const enBloque = async (ts, enviar) => {
+      await networkHelpers.time.setNextBlockTimestamp(ts);
+      const hash = await enviar();
+      const recibo = await publicClient.waitForTransactionReceipt({ hash });
+      const bloque = await publicClient.getBlock({ blockNumber: recibo.blockNumber });
+      assert.equal(bloque.timestamp, BigInt(ts), "la transacción cayó en el segundo previsto");
+      return recibo;
+    };
+
+    // publica con ventana, el verificador liquida cerca del plazo y queda Pending
+    const liquidarCercaDelPlazo = async () => {
+      plazo = await deadline(86_400);
+      await escrow.write.postBounty([verifier.account.address, plazo, WINDOW, "repo#9"], { value: AMOUNT });
+      await enBloque(Number(plazo) - ANTES_DEL_PLAZO, () =>
+        escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+      );
+
+      const b = await escrow.read.getBounty([1n]);
+      assert.equal(b.status, 2);
+      assert.ok(b.claimableAt > plazo, "la ventana de objeción termina después del plazo");
+    };
+
+    it("objeción en el último segundo: si el verificador reliquida dentro del plazo, el desarrollador cobra", async () => {
+      await liquidarCercaDelPlazo();
+      await enBloque(Number(plazo) - 1, () => escrow.write.challenge([1n]));
+      assert.equal(await status(1n), 1);
+
+      const before = await publicClient.getBalance({ address: developer.account.address });
+      await enBloque(Number(plazo), () =>
+        escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+      );
+
+      assert.equal(await status(1n), 3);
+      assert.equal(
+        (await publicClient.getBalance({ address: developer.account.address })) - before,
+        AMOUNT - (AMOUNT * FEE_BPS) / BPS,
+      );
+      await assert.rejects(escrow.write.refund([1n]), /NotOpen/);
+    });
+
+    it("objeción en el último segundo: si el plazo vence antes de reliquidar, el financiador se reembolsa", async () => {
+      await liquidarCercaDelPlazo();
+      await enBloque(Number(plazo) - 1, () => escrow.write.challenge([1n]));
+
+      // un segundo después del plazo el verificador ya no puede liquidar...
+      await networkHelpers.time.setNextBlockTimestamp(Number(plazo) + 1);
+      await assert.rejects(
+        escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+        /DeadlinePassed/,
+      );
+
+      // ...y el reembolso pasa: el desarrollador aprobado se queda sin nada
+      const devAntes = await publicClient.getBalance({ address: developer.account.address });
+      const funderAntes = await publicClient.getBalance({ address: funder.account.address });
+      const recibo = await enBloque(Number(plazo) + 1, () => escrow.write.refund([1n]));
+
+      assert.equal(await status(1n), 4);
+      assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n);
+      assert.equal(await publicClient.getBalance({ address: developer.account.address }), devAntes);
+      assert.equal(
+        (await publicClient.getBalance({ address: funder.account.address })) - funderAntes,
+        AMOUNT - recibo.gasUsed * recibo.effectiveGasPrice,
+        "el financiador recupera el importe entero",
+      );
+      const [evento] = await escrow.getEvents.BountyRefunded();
+      assert.equal(evento.args.amount, AMOUNT);
+    });
+
+    it("ni siquiera hace falta correr: se puede objetar después del plazo y reembolsar en el bloque siguiente", async () => {
+      await liquidarCercaDelPlazo();
+
+      // con el plazo ya vencido, refund no puede tocar un pago pendiente...
+      await networkHelpers.time.setNextBlockTimestamp(Number(plazo) + 10);
+      await assert.rejects(escrow.write.refund([1n]), /NotOpen/);
+
+      // ...pero challenge no mira el plazo, solo claimableAt, y lo devuelve a Open
+      await enBloque(Number(plazo) + 10, () => escrow.write.challenge([1n]));
+      assert.equal(await status(1n), 1);
+
+      // el verificador ya no tiene ningún bloque en el que reliquidar
+      await networkHelpers.time.setNextBlockTimestamp(Number(plazo) + 11);
+      await assert.rejects(
+        escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+        /DeadlinePassed/,
+      );
+
+      const devAntes = await publicClient.getBalance({ address: developer.account.address });
+      await enBloque(Number(plazo) + 11, () => escrow.write.refund([1n]));
+
+      assert.equal(await status(1n), 4);
+      assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n);
+      assert.equal(await publicClient.getBalance({ address: developer.account.address }), devAntes);
+    });
+
+    it("si la ventana termina antes del plazo, la objeción tardía sí deja tiempo para reliquidar", async () => {
+      plazo = await deadline(86_400);
+      await escrow.write.postBounty([verifier.account.address, plazo, WINDOW, "repo#9"], { value: AMOUNT });
+      await enBloque(Number(plazo) - WINDOW - 100, () =>
+        escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+      );
+
+      // lo más tarde que puede objetar es claimableAt - 1 = plazo - 101: al verificador le
+      // quedan deadline - claimableAt + 1 = 101 s, un margen que se encoge a un bloque
+      // cuando claimableAt se acerca al plazo
+      await enBloque(Number(plazo) - 101, () => escrow.write.challenge([1n]));
+
+      await networkHelpers.time.setNextBlockTimestamp(Number(plazo) - 100);
+      await assert.rejects(escrow.write.refund([1n]), /TooEarly/);
+
+      await enBloque(Number(plazo) - 100, () =>
+        escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account }),
+      );
+      assert.equal(await status(1n), 3);
+    });
+  });
 });
