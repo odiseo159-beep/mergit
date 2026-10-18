@@ -257,4 +257,168 @@ describe("MergitEscrow", async () => {
     assert.equal(fee, (parseEther("1") * FEE_BPS) / BPS);
     assert.equal(payout, parseEther("1") - fee);
   });
+
+  // ── guardia nonReentrant (auditoría de ataques de reentrada) ───────────
+
+  describe("guardia nonReentrant", () => {
+    let atacante;
+
+    beforeEach(async () => {
+      atacante = await viem.deployContract("AtacanteReentrancia", [
+        escrow.address,
+      ]);
+    });
+
+    it("impide la reentrada en settle sobre el mismo bounty durante la liquidación", async () => {
+      const deadline = await futureDeadline();
+      const amount = parseEther("1");
+      await escrow.write.postBounty([verifier.account.address, deadline, "bounty-1"], {
+        value: amount,
+      });
+
+      const evidence = keccak256(toHex("evidencia:1"));
+
+      // Configuramos el atacante para que intente reentrar en settle sobre el mismo bounty
+      // Modo 1 = ReentrarSettleMismo
+      await atacante.write.prepararAtaque([1, 1n, atacante.address, evidence]);
+
+      // El verificador liquida al desarrollador (el contrato atacante)
+      await escrow.write.settle([1n, atacante.address, evidence], {
+        account: verifier.account,
+      });
+
+      // Verificamos que el gancho receive() del atacante intentó reentrar
+      assert.equal(await atacante.read.intentosAtaque(), 1n);
+      // Verificamos que la llamada interna fue interceptada y revertida
+      assert.equal(await atacante.read.ataqueRevertido(), true);
+      // El selector devuelto debe ser exactamente el error Reentrancy() (0xab143c06)
+      const errBytes = await atacante.read.ultimoErrorRevert();
+      assert.equal(errBytes.slice(0, 10), "0xab143c06", "la reentrada debe fallar con error Reentrancy()");
+
+      // Los balances y el estado final quedan estrictamente correctos
+      const b = await escrow.read.getBounty([1n]);
+      assert.equal(b.status, 2); // Settled
+      assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n);
+    });
+
+    it("impide la reentrada cruzada en settle hacia otro bounty", async () => {
+      const deadline = await futureDeadline();
+      await escrow.write.postBounty([verifier.account.address, deadline, "bounty-1"], {
+        value: parseEther("1"),
+      });
+      await escrow.write.postBounty([verifier.account.address, deadline, "bounty-2"], {
+        value: parseEther("2"),
+      });
+
+      const ev1 = keccak256(toHex("ev:1"));
+      const ev2 = keccak256(toHex("ev:2"));
+
+      // Al recibir fondos de bounty 1, intenta liquidar el bounty 2
+      // Modo 2 = ReentrarSettleOtro
+      await atacante.write.prepararAtaque([2, 2n, atacante.address, ev2]);
+
+      await escrow.write.settle([1n, atacante.address, ev1], {
+        account: verifier.account,
+      });
+
+      assert.equal(await atacante.read.intentosAtaque(), 1n);
+      assert.equal(await atacante.read.ataqueRevertido(), true);
+      const errBytes = await atacante.read.ultimoErrorRevert();
+      assert.equal(errBytes.slice(0, 10), "0xab143c06");
+
+      // El segundo bounty sigue intacto y con sus fondos
+      const b2 = await escrow.read.getBounty([2n]);
+      assert.equal(b2.status, 1); // Open
+      assert.equal(
+        await publicClient.getBalance({ address: escrow.address }),
+        parseEther("2"),
+      );
+    });
+
+    it("impide la reentrada en refund durante la liquidación de un bounty", async () => {
+      const deadline = await futureDeadline();
+      await escrow.write.postBounty([verifier.account.address, deadline, "bounty-1"], {
+        value: parseEther("1"),
+      });
+
+      const ev = keccak256(toHex("ev:1"));
+      // Modo 3 = ReentrarRefundMismo
+      await atacante.write.prepararAtaque([3, 1n, atacante.address, ev]);
+
+      await escrow.write.settle([1n, atacante.address, ev], {
+        account: verifier.account,
+      });
+
+      assert.equal(await atacante.read.intentosAtaque(), 1n);
+      assert.equal(await atacante.read.ataqueRevertido(), true);
+      const errBytes = await atacante.read.ultimoErrorRevert();
+      assert.equal(errBytes.slice(0, 10), "0xab143c06");
+    });
+
+    it("impide la reentrada en refund sobre el mismo bounty durante un reembolso", async () => {
+      const deadline = await futureDeadline(10);
+      const amount = parseEther("1");
+
+      // El atacante financia y publica su propio bounty para ser el b.funder
+      await atacante.write.publicarBounty(
+        [verifier.account.address, deadline, "bounty-atacante"],
+        { value: amount, account: funder.account },
+      );
+
+      // Avanzamos el tiempo para permitir el reembolso
+      await networkHelpers.time.increaseTo(Number(deadline) + 1);
+
+      // Configuramos el atacante para que al recibir el reembolso intente volver a reembolsarse
+      // Modo 3 = ReentrarRefundMismo
+      await atacante.write.prepararAtaque([3, 1n, atacante.address, "0x".padEnd(66, "0")]);
+
+      await atacante.write.reclamarReembolso([1n]);
+
+      assert.equal(await atacante.read.intentosAtaque(), 1n);
+      assert.equal(await atacante.read.ataqueRevertido(), true);
+      const errBytes = await atacante.read.ultimoErrorRevert();
+      assert.equal(errBytes.slice(0, 10), "0xab143c06");
+
+      const b = await escrow.read.getBounty([1n]);
+      assert.equal(b.status, 3); // Refunded
+      assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n);
+    });
+
+    it("impide la reentrada cruzada en settle durante un reembolso", async () => {
+      const deadline1 = await futureDeadline(10);
+      const deadline2 = await futureDeadline(3600);
+
+      // Bounty 1: financiado por el atacante
+      await atacante.write.publicarBounty(
+        [verifier.account.address, deadline1, "bounty-1"],
+        { value: parseEther("1"), account: funder.account },
+      );
+
+      // Bounty 2: financiado por funder normal
+      await escrow.write.postBounty([verifier.account.address, deadline2, "bounty-2"], {
+        value: parseEther("2"),
+      });
+
+      await networkHelpers.time.increaseTo(Number(deadline1) + 1);
+
+      const ev2 = keccak256(toHex("ev:2"));
+      // Durante el reembolso de bounty 1, intenta liquidar el bounty 2
+      // Modo 2 = ReentrarSettleOtro
+      await atacante.write.prepararAtaque([2, 2n, atacante.address, ev2]);
+
+      await atacante.write.reclamarReembolso([1n]);
+
+      assert.equal(await atacante.read.intentosAtaque(), 1n);
+      assert.equal(await atacante.read.ataqueRevertido(), true);
+      const errBytes = await atacante.read.ultimoErrorRevert();
+      assert.equal(errBytes.slice(0, 10), "0xab143c06");
+
+      // Bounty 2 permanece abierto
+      assert.equal((await escrow.read.getBounty([2n])).status, 1); // Open
+      assert.equal(
+        await publicClient.getBalance({ address: escrow.address }),
+        parseEther("2"),
+      );
+    });
+  });
 });
