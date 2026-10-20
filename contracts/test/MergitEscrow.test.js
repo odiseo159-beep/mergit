@@ -257,4 +257,144 @@ describe("MergitEscrow", async () => {
     assert.equal(fee, (parseEther("1") * FEE_BPS) / BPS);
     assert.equal(payout, parseEther("1") - fee);
   });
+
+  // ── guardia de reentrada (Issue #2, Bounty: #10) ───────────────
+  //
+  // Comprobamos que `nonReentrant` protege activamente las funciones
+  // `settle` y `refund` ante callbacks reentrantes tanto sobre el mismo
+  // bounty como sobre otros concurrentes, validando los saldos finales
+  // y el selector exacto de error Reentrancy().
+
+  const SELECTOR_REENTRANCY = "0xab143c06"; // bytes4(keccak256("Reentrancy()"))
+
+  async function desplegarAtacante() {
+    return viem.deployContract("AtacanteDeReentrada", [escrow.address]);
+  }
+
+  it("settle: la reentrada sobre el mismo bounty es bloqueada por nonReentrant", async () => {
+    const atacante = await desplegarAtacante();
+    const deadline = await futureDeadline();
+    const monto = parseEther("1");
+
+    await escrow.write.postBounty([atacante.address, deadline, "bounty-1"], {
+      value: monto,
+      account: funder.account,
+    });
+    // Modo 1 = SettleMismoBounty
+    await atacante.write.configurarAtaque([1, 1n, 1n]);
+
+    await atacante.write.iniciarSettle([1n, keccak256(toHex("prueba-settle-mismo"))]);
+
+    assert.equal(await atacante.read.llamadaRecibida(), true, "el callback receive() se ejecuto");
+    assert.equal(await atacante.read.ataqueBloqueado(), true, "la guardia detuvo la reentrada");
+    assert.equal(await atacante.read.ultimoErrorSelector(), SELECTOR_REENTRANCY);
+
+    const b = await escrow.read.getBounty([1n]);
+    assert.equal(b.status, 2, "el bounty quedo Settled");
+    assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n, "balance del escrow en cero");
+  });
+
+  it("settle: liquidar otro bounty dentro del payout es bloqueado por la guardia", async () => {
+    const atacante = await desplegarAtacante();
+    const deadline = await futureDeadline();
+
+    await escrow.write.postBounty([atacante.address, deadline, "bounty-1"], {
+      value: parseEther("1"),
+      account: funder.account,
+    });
+    await escrow.write.postBounty([atacante.address, deadline, "bounty-2"], {
+      value: parseEther("2"),
+      account: funder.account,
+    });
+    // Modo 2 = SettleOtroBounty
+    await atacante.write.configurarAtaque([2, 1n, 2n]);
+
+    await atacante.write.iniciarSettle([1n, keccak256(toHex("prueba-settle-otro"))]);
+
+    assert.equal(await atacante.read.ataqueBloqueado(), true, "la guardia impidio el segundo settle");
+    assert.equal(await atacante.read.ultimoErrorSelector(), SELECTOR_REENTRANCY);
+
+    const b2 = await escrow.read.getBounty([2n]);
+    assert.equal(b2.status, 1, "el segundo bounty continua Open");
+    assert.equal(
+      await publicClient.getBalance({ address: escrow.address }),
+      parseEther("2"),
+      "los fondos del segundo bounty permanecen intactos",
+    );
+  });
+
+  it("refund: reembolsar el mismo bounty desde receive() es bloqueado por la guardia", async () => {
+    const atacante = await desplegarAtacante();
+    const deadline = await futureDeadline(60);
+
+    // El atacante crea su propio bounty como funder
+    await atacante.write.publicarBounty([deadline], { value: parseEther("1") });
+    // Modo 3 = RefundMismoBounty
+    await atacante.write.configurarAtaque([3, 1n, 1n]);
+
+    await networkHelpers.time.increaseTo(Number(deadline) + 1);
+    await atacante.write.iniciarRefund([1n]);
+
+    assert.equal(await atacante.read.llamadaRecibida(), true, "receive() fue invocado");
+    assert.equal(await atacante.read.ataqueBloqueado(), true, "la reentrada fue rechazada");
+    assert.equal(await atacante.read.ultimoErrorSelector(), SELECTOR_REENTRANCY);
+
+    const b = await escrow.read.getBounty([1n]);
+    assert.equal(b.status, 3, "el bounty paso a Refunded");
+    assert.equal(await publicClient.getBalance({ address: escrow.address }), 0n);
+  });
+
+  it("refund: forzar settle de otro bounty durante refund es bloqueado por la guardia", async () => {
+    const atacante = await desplegarAtacante();
+    const deadlineCorto = await futureDeadline(60);
+    const deadlineLargo = await futureDeadline(3600);
+
+    await atacante.write.publicarBounty([deadlineCorto], { value: parseEther("1") });
+    await escrow.write.postBounty([atacante.address, deadlineLargo, "bounty-largo"], {
+      value: parseEther("2"),
+      account: funder.account,
+    });
+    // Modo 4 = SettleDuranteRefund
+    await atacante.write.configurarAtaque([4, 1n, 2n]);
+
+    await networkHelpers.time.increaseTo(Number(deadlineCorto) + 1);
+    await atacante.write.iniciarRefund([1n]);
+
+    assert.equal(await atacante.read.ataqueBloqueado(), true);
+    assert.equal(await atacante.read.ultimoErrorSelector(), SELECTOR_REENTRANCY);
+
+    const b2 = await escrow.read.getBounty([2n]);
+    assert.equal(b2.status, 1, "el bounty largo sigue Open");
+    assert.equal(
+      await publicClient.getBalance({ address: escrow.address }),
+      parseEther("2"),
+      "el balance del escrow preserva los fondos del bounty 2",
+    );
+  });
+
+  it("verificacion de saldos: la guardia asegura que ningun atacante drene fondos adicionales", async () => {
+    const atacante = await desplegarAtacante();
+    const deadline = await futureDeadline();
+    const valorBounty = parseEther("1");
+
+    await escrow.write.postBounty([atacante.address, deadline, "bounty-saldo"], {
+      value: valorBounty,
+      account: funder.account,
+    });
+    await atacante.write.configurarAtaque([1, 1n, 1n]);
+
+    const balanceEscrowAntes = await publicClient.getBalance({ address: escrow.address });
+    const balanceAtacanteAntes = await publicClient.getBalance({ address: atacante.address });
+
+    await atacante.write.iniciarSettle([1n, keccak256(toHex("saldo-check"))]);
+
+    const balanceEscrowDespues = await publicClient.getBalance({ address: escrow.address });
+    const balanceAtacanteDespues = await publicClient.getBalance({ address: atacante.address });
+
+    const comisionEsperada = (valorBounty * FEE_BPS) / BPS;
+    const pagoEsperado = valorBounty - comisionEsperada;
+
+    assert.equal(balanceAtacanteDespues - balanceAtacanteAntes, pagoEsperado);
+    assert.equal(balanceEscrowAntes - balanceEscrowDespues, valorBounty);
+  });
 });
