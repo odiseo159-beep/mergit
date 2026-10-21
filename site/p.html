@@ -154,7 +154,7 @@ footer a:hover{color:var(--ink)}
     <div class="stat"><div class="k">Paid for merged work</div><div class="v r" id="s-total">—</div><div class="s" id="s-total-sub">on GIWA Sepolia</div></div>
     <div class="stat"><div class="k">Bounties settled</div><div class="v" id="s-count">—</div><div class="s" id="s-count-sub">verified by the agent</div></div>
     <div class="stat"><div class="k">Paid by</div><div class="v" id="s-funders">—</div><div class="s" id="s-funders-sub">wallets other than this one</div></div>
-    <div class="stat"><div class="k">Registered on-chain</div><div class="v" id="s-since">—</div><div class="s" id="s-since-sub">one wallet, one login</div></div>
+    <div class="stat"><div class="k" id="s-since-label">Registered on-chain</div><div class="v" id="s-since">—</div><div class="s" id="s-since-sub">one wallet, one login</div></div>
   </div>
 
   <section id="claim-sec">
@@ -292,6 +292,40 @@ async function checkProof(login, wallet, proofURI) {
   return { ok: false, reason: "the proof is neither a gist nor a GitHub repository README" };
 }
 
+/**
+ * El README del perfil, `github.com/<login>/<login>`, leido con la misma regla
+ * que usa el agente en `agent/registry.mjs`: una linea que nombre a Mergit y
+ * lleve una direccion. Si hay dos direcciones distintas no se adivina.
+ *
+ * Esto existe porque el camino gratis no toca la cadena. Sin esto, quien puso
+ * la linea en su README entraba aqui y leia "has not registered", que es falso
+ * y ademas lo desanima justo en el paso que mas se falla.
+ */
+async function walletFromProfile(login) {
+  const lee = async (url, decode) => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return decode ? decode(await r.json()) : await r.text();
+    } catch { return null; }
+  };
+  const body =
+    await lee(`https://raw.githubusercontent.com/${encodeURIComponent(login)}/${encodeURIComponent(login)}/HEAD/README.md`)
+    ?? await lee(`${GH}/repos/${encodeURIComponent(login)}/${encodeURIComponent(login)}/readme`,
+                 (j) => atob((j.content ?? "").replace(/\n/g, "")));
+  if (!body) return null;
+
+  const found = new Set();
+  for (const line of body.split(/[\r\n]+/)) {
+    if (!/mergit/i.test(line)) continue;
+    const m = line.match(/0x[a-fA-F0-9]{40}/);
+    if (m) found.add(m[0].toLowerCase());
+  }
+  const unique = [...found];
+  if (unique.length !== 1) return null;
+  return { wallet: unique[0], source: "profile", where: `${login}/${login} README` };
+}
+
 /** Eventos decodificados de un escrow. El explorador los entrega ya legibles. */
 async function logsOf(address) {
   const ctl = new AbortController();
@@ -331,15 +365,22 @@ function renderClaim(login, claim, proof) {
   const rows = [];
   rows.push(["GitHub", `<a href="https://github.com/${encodeURIComponent(login)}" rel="noopener">@${esc(login)}</a>`]);
   rows.push(["Wallet", `<a href="${EXPLORER}/address/${claim.wallet}" rel="noopener">${claim.wallet}</a>`]);
-  rows.push(["Claimed", `${new Date(Number(claim.claimedAt) * 1000).toISOString().replace("T", " ").slice(0, 16)} UTC`]);
-  rows.push(["Proof", `<a href="${esc(claim.proofURI)}" rel="noopener">${esc(claim.proofURI)}</a>`]);
+  if (claim.source === "profile") {
+    rows.push(["Where it comes from", `the README of <a href="https://github.com/${encodeURIComponent(login)}/${encodeURIComponent(login)}" rel="noopener">${esc(login)}/${esc(login)}</a>, which only this account can edit`]);
+    rows.push(["Registry", `not registered on chain, and it does not need to be. The agent reads the README the same way this page just did`]);
+  } else {
+    rows.push(["Claimed", `${new Date(Number(claim.claimedAt) * 1000).toISOString().replace("T", " ").slice(0, 16)} UTC`]);
+    rows.push(["Proof", `<a href="${esc(claim.proofURI)}" rel="noopener">${esc(claim.proofURI)}</a>`]);
+  }
   const verdict = proof.ok
     ? `${tagFor("paid").replace("Paid", "Proof holds")} <span style="color:var(--dim)"> ${esc(proof.where)}</span>`
     : proof.error
       ? `<span class="tag"><i></i>Not checked</span> <span style="color:var(--dim)"> ${esc(proof.error)}</span>`
       : `${tagFor("x")} <span style="color:var(--dim)"> ${esc(proof.reason)}</span>`;
   rows.push(["Checked just now", verdict]);
-  rows.push(["Registry", `<a href="${EXPLORER}/address/${REGISTRY}" rel="noopener">${short(REGISTRY, 10, 8)}</a>`]);
+  if (claim.source !== "profile") {
+    rows.push(["Registry", `<a href="${EXPLORER}/address/${REGISTRY}" rel="noopener">${short(REGISTRY, 10, 8)}</a>`]);
+  }
   $("claim-card").innerHTML = rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
 }
 
@@ -443,22 +484,36 @@ async function load() {
     return;
   }
 
+  // Sin reclamacion en el registro queda el camino gratis: la linea en el README
+  // del perfil. Es el mismo orden que sigue el agente antes de pagar.
+  if (!claim) claim = await walletFromProfile(login);
+
   if (!claim) {
-    $("title").innerHTML = `@${esc(login)} <span class="r">has not registered.</span>`;
+    $("title").innerHTML = `@${esc(login)} <span class="r">has no wallet yet.</span>`;
     $("claim-card").innerHTML = `<div class="row"><span class="k">Registry</span><span class="v">no wallet claims this login</span></div>
-      <div class="row"><span class="k">What that means</span><span class="v">merged work by this account cannot be paid through the registry</span></div>
-      <div class="row"><span class="k">Fix it</span><span class="v"><a href="/register">register it from your wallet</a></span></div>`;
-    $("paid-out").innerHTML = '<div class="empty">Nothing on-chain ties this login to an address, so there is nothing to show.</div>';
-    $("src").textContent = "read from the chain";
+      <div class="row"><span class="k">Profile README</span><span class="v">no line naming Mergit with an address</span></div>
+      <div class="row"><span class="k">What that means</span><span class="v">merged work by this account cannot be paid yet</span></div>
+      <div class="row"><span class="k">Free fix</span><span class="v">put one line naming Mergit and your address in the README of <b>github.com/${esc(login)}/${esc(login)}</b>. Nothing to connect, no gas, nothing to sign</div>
+      <div class="row"><span class="k">Or on chain</span><span class="v"><a href="/register">register it from your wallet</a></span></div>`;
+    $("paid-out").innerHTML = '<div class="empty">Nothing ties this login to an address, so there is nothing to show.</div>';
+    $("src").textContent = "read from the chain and from GitHub";
     return;
   }
 
   // La prueba se comprueba en vivo: si se rompió después de reclamar, se ve aquí.
-  let proof = { ok: false, reason: "not checked" };
-  try {
-    proof = await checkProof(login, claim.wallet, claim.proofURI);
-  } catch (e) {
-    proof = { ok: false, error: e.message };
+  // En el camino gratis el README que se acaba de leer es la prueba: no hay nada
+  // guardado en la cadena que pudiera haber dejado de ser cierto.
+  let proof = { ok: true, where: claim.where };
+  if (claim.source !== "profile") {
+    proof = { ok: false, reason: "not checked" };
+    try {
+      proof = await checkProof(login, claim.wallet, claim.proofURI);
+    } catch (e) {
+      proof = { ok: false, error: e.message };
+    }
+  }
+  if (claim.source === "profile") {
+    $("lede").innerHTML = 'The payments below are escrow events on GIWA Sepolia. The wallet is not: it comes from <b>the README of this account’s own profile repository</b>, re-read every time this page loads, which is the same thing the agent does before it pays.';
   }
   renderClaim(login, claim, proof);
   renderShow(login);
@@ -519,13 +574,21 @@ async function load() {
     stillPending.length ? `${stillPending.length} waiting out a challenge window` : "",
     selfFunded ? `${selfFunded} self-funded, not counted` : "",
   ].filter(Boolean).join(" · ") || "paid by somebody else";
-  $("s-since").textContent = day(new Date(Number(claim.claimedAt) * 1000).toISOString());
-  $("s-since-sub").textContent = proof.ok ? "proof holds right now" : proof.error ? "proof not checked just now" : "proof does not check out";
+  if (claim.source === "profile") {
+    $("s-since-label").textContent = "Wallet comes from";
+    $("s-since").textContent = "README";
+    $("s-since-sub").textContent = "the free path, nothing signed";
+  } else {
+    $("s-since").textContent = day(new Date(Number(claim.claimedAt) * 1000).toISOString());
+    $("s-since-sub").textContent = proof.ok ? "proof holds right now" : proof.error ? "proof not checked just now" : "proof does not check out";
+  }
 
   $("src").textContent = reached === ESCROWS.length ? "read from the chain" : "partially read";
-  $("paid-note").textContent = reached === ESCROWS.length
-    ? "Payments made before this login was claimed may have gone to a different address, and would not appear here. The record follows the wallet in the registry, not the person."
-    : "One of the two escrows did not answer, so this list may be incomplete. Reload in a moment.";
+  $("paid-note").textContent = reached !== ESCROWS.length
+    ? "One of the two escrows did not answer, so this list may be incomplete. Reload in a moment."
+    : claim.source === "profile"
+      ? "The record follows the wallet, not the person. Change the address in your README and the payments listed here change with it."
+      : "Payments made before this login was claimed may have gone to a different address, and would not appear here. The record follows the wallet in the registry, not the person.";
 }
 
 $("find").addEventListener("submit", (e) => {
