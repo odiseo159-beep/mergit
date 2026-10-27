@@ -1,0 +1,53 @@
+# Avisa de lo que está a punto de costar dinero, antes de que cueste.
+#
+# El 25 de octubre los bounties #9 y #10 vencieron con cuatro pull requests
+# listos. No falló el producto: falló que nadie miró el calendario. El contrato
+# no deja liquidar pasado el plazo, así que ocho personas trabajaron gratis por
+# una fecha.
+#
+# Este workflow **no tiene ninguna clave y no firma nada**. Lee la cadena por el
+# explorador, lee los pull requests y las corridas por la API, y comenta en un
+# issue fijo, que es lo que llega al correo.
+#
+# ⚠️ **En un repositorio público, un workflow programado se apaga solo a los 60
+# días sin actividad.** GitHub avisa por correo antes. Si deja de llegar el
+# aviso diario, mira si está desactivado antes de pensar que no hay nada que
+# avisar: un vigilante apagado en silencio es peor que no tenerlo.
+name: Watchdog
+
+on:
+  schedule:
+    # 06:00 UTC, que es la madrugada en Lima: el aviso está al despertarse.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write         # el issue fijo y su aviso
+  pull-requests: read   # quién reclama cada bounty
+  actions: read         # qué corridas esperan aprobación
+
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+
+jobs:
+  look:
+    name: What needs a hand today
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the clock against the chain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # A quién mencionar. La mención es lo que manda el correo.
+          AVISAR_A: odiseo159-beep
+          # Desde cuántas horas antes del vencimiento empieza a avisar.
+          HORAS: "72"
+          MERGIT_VERIFIER: "0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b"
+        run: node scripts/watchdog.mjs

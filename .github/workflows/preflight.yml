@@ -1,0 +1,65 @@
+# Le dice a quien abre un pull request qué le falta para cobrar, antes de que
+# trabaje gratis. De las ocho primeras personas que mandaron trabajo, seis no
+# podían cobrar, y ninguna lo supo hasta después del merge.
+#
+# ─────────────────────────── Por qué pull_request_target ───────────────────
+#
+# Un `pull_request` desde un fork trae un token de solo lectura: no puede
+# comentar. `pull_request_target` corre con el token del repositorio base, que
+# sí puede, y además **corre sin esperar a que un mantenedor apruebe**, que es
+# justo cuando hace falta avisar.
+#
+# A cambio hay que ser estricto, porque es un workflow con permiso de escritura:
+#
+#   1. **No se hace checkout de la rama del pull request.** `actions/checkout`
+#      sin `ref` trae la rama base, que es nuestro código. Traer
+#      `github.event.pull_request.head.sha` sería ejecutar lo que mande un
+#      desconocido con este token.
+#   2. **El cuerpo del pull request entra por `env:`, nunca interpolado dentro
+#      de un `run:`.** Pegar `${{ github.event.pull_request.body }}` en un script
+#      es inyección de shell: basta con que alguien escriba comillas y un punto
+#      y coma en la descripción.
+#   3. **No recibe `MERGIT_AGENT_KEY`.** Este workflow no firma nada. Lo único
+#      que hace es leer la cadena y comentar.
+#   4. Permisos: solo `pull-requests: write`.
+#
+# El script no instala dependencias: lee la cadena por el explorador y el README
+# por raw.githubusercontent.com.
+name: Preflight
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+
+# Un comentario por pull request, no uno por empujón.
+concurrency:
+  group: preflight-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Can this pull request be paid
+    runs-on: ubuntu-latest
+    steps:
+      # Sin `ref`: la rama base, que es código nuestro. Nunca la del fork.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Say what is missing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          # Por `env`, no dentro del `run`. Ver la regla 2 de arriba.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          # La wallet del agente de este repositorio. Un bounty que nombre a otro
+          # verificador no lo puede liquidar este agente, y conviene decirlo.
+          MERGIT_VERIFIER: "0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b"
+        run: node scripts/preflight-comment.mjs
