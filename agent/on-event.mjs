@@ -24,8 +24,10 @@
 //   MERGIT_PR         opcional: número de PR a revisar, para una corrida manual.
 import { readFileSync, appendFileSync } from "node:fs";
 import { formatEther } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { settleBounty } from "./settle.mjs";
 import { resolveWallet, registryAddress } from "./registry.mjs";
+import { listBounties, isLive, closedIssues, bountyForIssue } from "./bounties.mjs";
 
 const API = "https://api.github.com";
 const REPO = process.env.GITHUB_REPOSITORY;
@@ -83,16 +85,68 @@ if (!prs.length) {
 
 const repoInfo = await gh(`/repos/${REPO}`);
 const registry = await loadRegistry(repoInfo.default_branch);
+const registryFunders = await loadFunders(repoInfo.default_branch);
+
+// Los bounties vivos, una vez por corrida. Sirven para dos cosas: comprobar que
+// el número que escribió el autor todavía vale, y resolverlo desde el issue
+// cuando no vale o cuando no lo escribió.
+let catalogo = [];
+try {
+  catalogo = await listBounties();
+} catch (e) {
+  console.log(`(no se pudo leer el catálogo de bounties: ${e.message})`);
+}
+const verifier = agentAddress();
+// Quién puede financiar un bounty que este agente liquide. Sin lista, cualquiera,
+// y entonces la única defensa contra un bounty intruso es negarse si hay dos.
+const funders = registryFunders;
 
 for (const pr of prs) {
   const tag = `#${pr.number}`;
+  const author = pr.user.login;
   const bountyMatch = (pr.body ?? "").match(/^\s*bounty:\s*#?(\d+)\s*$/im);
-  if (!bountyMatch) {
-    say(`${tag}: no \`Bounty: #N\` line in the description. Not a bounty.`);
+
+  let bountyId = null;
+  let origen = "";
+
+  // 1 · la línea explícita, si nombra un bounty que sigue vivo y es nuestro
+  if (bountyMatch) {
+    const pedido = catalogo.find((b) => b.id === bountyMatch[1]);
+    if (!catalogo.length) {
+      bountyId = bountyMatch[1];
+      origen = "the `Bounty: #N` line";
+    } else if (pedido && isLive(pedido) && (!verifier || pedido.verifier === verifier.toLowerCase())) {
+      bountyId = pedido.id;
+      origen = "the `Bounty: #N` line";
+    }
+  }
+
+  // 2 · el issue que el pull request cierra. El número del bounty es un detalle
+  //     del escrow: cambia cada vez que se repone, y el autor no tiene por qué
+  //     enterarse. El issue no cambia.
+  if (!bountyId && catalogo.length) {
+    const issues = closedIssues(pr.body);
+    const intentos = [];
+    for (const n of issues) {
+      const r = bountyForIssue({ bounties: catalogo, owner: OWNER, repo: NAME, issue: n, verifier, funders });
+      if (r.bounty) { bountyId = r.bounty.id; origen = `issue #${n}`; break; }
+      intentos.push(r.reason);
+      if (r.ambiguous) break;   // con ambigüedad no se sigue probando: se para
+    }
+    if (!bountyId && intentos.length) {
+      say(`${tag}: ${intentos[intentos.length - 1]}. Not paid.`);
+      if (pr.merged_at) await comment(pr.number, `**Mergit did not pay this pull request.** ${intentos[intentos.length - 1]}.`);
+      continue;
+    }
+  }
+
+  if (!bountyId) {
+    say(`${tag}: no \`Bounty: #N\` line and no issue with an open bounty behind it. Not a bounty.`);
     continue;
   }
-  const bountyId = bountyMatch[1];
-  const author = pr.user.login;
+  if (origen !== "the `Bounty: #N` line") {
+    say(`${tag}: bounty #${bountyId} resolved from ${origen}, not from the description.`);
+  }
 
   // El registro on-chain manda; `mergit.json` es el camino viejo, todavía válido
   // mientras el autor no reclame su login.
@@ -179,6 +233,46 @@ for (const pr of prs) {
 finish();
 
 // ─────────────────────────────── Utilidades ─────────────────────────
+
+/**
+ * La dirección con la que este agente firma. Sirve para descartar bounties que
+ * nombran a otro verificador: este agente no puede liquidarlos, y proponerlos
+ * solo confunde.
+ *
+ * Sin clave (modo ensayo) se puede fijar con MERGIT_VERIFIER para que el ensayo
+ * diga la verdad. Si no hay ninguna de las dos, no se filtra por verificador.
+ */
+function agentAddress() {
+  if (process.env.MERGIT_VERIFIER) return process.env.MERGIT_VERIFIER;
+  const key = process.env.MERGIT_AGENT_KEY;
+  if (!key) return null;
+  try {
+    return privateKeyToAccount(key.startsWith("0x") ? key : `0x${key}`).address;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Los financiadores que este repositorio acepta, de `mergit.json`:
+ *
+ *     { "funders": ["0x23E8…7686"] }
+ *
+ * Financiar es abierto, así que cualquiera puede publicar un bounty de 1 wei
+ * apuntando a un issue nuestro para crear una ambigüedad que bloquee el pago.
+ * Con la lista, ese bounty intruso no entra en la cuenta. Sin lista, la única
+ * defensa es que el agente se niegue cuando hay más de uno, que es lo que hace.
+ */
+async function loadFunders(branch) {
+  try {
+    const file = await gh(`/repos/${REPO}/contents/mergit.json?ref=${branch}`);
+    const json = JSON.parse(Buffer.from(file.content, "base64").toString("utf8"));
+    const l = json.funders ?? [];
+    return Array.isArray(l) ? l.map((x) => String(x).toLowerCase()) : [];
+  } catch {
+    return [];
+  }
+}
 
 async function loadRegistry(branch) {
   try {
