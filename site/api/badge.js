@@ -1,9 +1,11 @@
 // Badge para el README de un desarrollador: /badge/<login>.svg
 //
-// Lee la cadena y nada más. **No llama a GitHub**: las funciones de Vercel salen
-// por IPs compartidas y el límite sin autenticar (60/hora) se agota enseguida,
-// con lo que el badge quedaría roto para todos. La comprobación de la prueba
-// vive en /p/<login>, que corre en el navegador de quien mira.
+// Lee la cadena y, si el registro no sabe nada, el README del perfil. **Nunca
+// llama a api.github.com**: las funciones de Vercel salen por IPs compartidas y
+// el límite sin autenticar (60/hora) se agota enseguida, con lo que el badge
+// quedaría roto para todos. raw.githubusercontent.com sí, porque es un CDN y no
+// gasta esa cuota. La comprobación de la prueba vive en /p/<login>, que corre en
+// el navegador de quien mira.
 //
 // Cuenta con las mismas reglas que /p: no suma lo que una wallet se pagó a sí
 // misma, deja fuera los bounties 1 y 2 de la v1 (pruebas de julio), y si no se
@@ -56,6 +58,39 @@ async function walletFor(login) {
   }
   if (releasedAt > claimed.block) return null;
   return String(claimed.wallet || "").toLowerCase();
+}
+
+/**
+ * El README del perfil, que es el camino gratis y el que usa casi todo el mundo.
+ *
+ * Sin esto el badge le decía "not registered" a quien sí cobra, que es el peor
+ * sitio donde podía fallar: el badge es el expediente viajando, lo que un dev
+ * pega en su propio README.
+ *
+ * Misma regla que `agent/registry.mjs`: una línea que nombre a Mergit y lleve
+ * una dirección. Si hay varias distintas no se adivina y no se enseña nada.
+ */
+async function walletFromProfile(login) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 5000);
+  try {
+    const url = `https://raw.githubusercontent.com/${encodeURIComponent(login)}/${encodeURIComponent(login)}/HEAD/README.md`;
+    const res = await fetch(url, { signal: ctl.signal });
+    if (!res.ok) return null;
+    const body = await res.text();
+    const found = new Set();
+    for (const line of body.split(/[\r\n]+/)) {
+      if (!/mergit/i.test(line)) continue;
+      const m = line.match(/0x[a-fA-F0-9]{40}/);
+      if (m) found.add(m[0].toLowerCase());
+    }
+    const unique = [...found];
+    return unique.length === 1 ? unique[0] : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 /** Pagos que le hizo otro, y cuántos financiadores distintos fueron. */
@@ -135,10 +170,10 @@ function card(login, state, bounties, funders) {
   if (state === "unknown") {
     body = `<text x="26" y="104" font-family="${SANS}" font-size="20" fill="#6a6a74">That login does not look right.</text>`;
   } else if (state === "none") {
-    body = `<text x="26" y="96" font-family="${SANS}" font-size="20" fill="#8a8a93">Not registered yet.</text>
-    <text x="26" y="124" font-family="${MONO}" font-size="11.5" fill="#55555d">mergit.xyz/register</text>`;
-  } else if (state === "zero") {
-    body = `<text x="26" y="96" font-family="${SANS}" font-size="20" fill="#8a8a93">Registered. Nothing paid yet.</text>
+    body = `<text x="26" y="96" font-family="${SANS}" font-size="20" fill="#8a8a93">No wallet yet.</text>
+    <text x="26" y="124" font-family="${MONO}" font-size="11.5" fill="#55555d">mergit.xyz/start</text>`;
+  } else if (state === "zero" || state === "ready") {
+    body = `<text x="26" y="96" font-family="${SANS}" font-size="20" fill="#8a8a93">Ready to be paid. Nothing yet.</text>
     <text x="26" y="124" font-family="${MONO}" font-size="11.5" fill="#55555d">the record starts at the first merge</text>`;
   } else {
     body = big(26, bounties, bounties === 1 ? "BOUNTY PAID" : "BOUNTIES PAID")
@@ -178,11 +213,17 @@ module.exports = async (req, res) => {
   if (!LOGIN_OK.test(login)) return res.status(200).send(out("unknown", 0, 0, "unknown login", "off"));
 
   try {
-    const wallet = await walletFor(login);
-    if (!wallet) return res.status(200).send(out("none", 0, 0, "not registered", "off"));
+    // el mismo orden que sigue el agente antes de pagar: registro, luego README
+    let wallet = await walletFor(login);
+    let fuente = "registry";
+    if (!wallet) {
+      wallet = await walletFromProfile(login);
+      fuente = "profile";
+    }
+    if (!wallet) return res.status(200).send(out("none", 0, 0, "no wallet yet", "off"));
 
     const { bounties, funders } = await recordOf(wallet);
-    if (!bounties) return res.status(200).send(out("zero", 0, 0, "registered", "on"));
+    if (!bounties) return res.status(200).send(out(fuente === "profile" ? "ready" : "zero", 0, 0, "ready to be paid", "on"));
 
     const b = bounties === 1 ? "1 bounty" : `${bounties} bounties`;
     return res.status(200).send(out("paid", bounties, funders, `${b} · ${plural(funders, "funder")}`, "on"));

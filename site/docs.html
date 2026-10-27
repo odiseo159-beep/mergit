@@ -496,6 +496,75 @@
   </div>
 </section>
 
+<!-- ── 09 ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">09</span>Questions about the builder record</h2>
+    <p class="lead">Every developer Mergit pays ends up with a page at
+      <a href="/p/odiseo159-beep">mergit.xyz/p/&lt;login&gt;</a>. These are the questions that
+      decide whether it is worth anything, including the ones with uncomfortable answers.</p>
+
+    <h3>Who writes the record?</h3>
+    <p>Nobody. There is no database. The page reads the escrow events on GIWA Sepolia every
+      time it loads, and the wallet comes from either the registry contract or the README of
+      your own profile repository. Mergit cannot add a line to it, and cannot remove one.</p>
+
+    <h3>What happens if I change the address in my README?</h3>
+    <p><b>What you were already paid stays.</b> The page reads the commit history of
+      <code>&lt;login&gt;/&lt;login&gt;</code> and reconstructs which address was published at
+      which time. A payment counts for an older address when the payment happened while that
+      address was the one on your profile.</p>
+
+    <h3>Then can I paste somebody else&rsquo;s address and take their history?</h3>
+    <p>No, and that is exactly why the windows exist. Collecting every address that ever
+      appeared in your README would let anyone add a stranger&rsquo;s address for one commit,
+      remove it, and inherit their payments. <b>An address only counts for the payments that
+      happened while it was published.</b> A commit you make today cannot reach backwards.</p>
+
+    <h3>Can I inflate my record by funding my own bounties?</h3>
+    <p>You can fund them, and the page will show them, because they are on chain and hiding
+      them would be lying. They are <b>marked as self-funded and excluded from the totals</b>.
+      The headline number counts what somebody else paid for, and next to it sits the count of
+      <b>distinct funders</b>, which is the number that actually costs something to raise: a
+      second wallet is free, a second person is not.</p>
+
+    <h3>The task description next to each payment, who wrote that?</h3>
+    <p>Whoever funded the bounty, in the <code>metadataURI</code> they passed to
+      <code>postBounty</code>. It is free text and <b>Mergit does not verify it</b>, which is why
+      the column says so. What is verified is the <code>evidenceHash</code> in the settlement
+      event: it commits to the repository, the pull request number, the author, the merge commit
+      and the CI checks, and anyone can recompute it from the pull request.</p>
+
+    <h3>Do I need a wallet to have a record?</h3>
+    <p>You need an address, which is not the same thing. One line naming Mergit and your address
+      in the README of the repository named after you is enough. Nothing to connect, no gas,
+      nothing signed. Registering on chain at <a href="/register">/register</a> is the other
+      way, and it costs gas.</p>
+
+    <h3>Can a machine read it?</h3>
+    <p>Yes. <code>GET /record/&lt;login&gt;.json</code> returns the same record as JSON, with
+      every payment, the task text marked as funder-written, the evidence hash and the
+      transaction. It reads the chain at request time, the same as the page.</p>
+
+    <h3>What is still weak about this</h3>
+    <p>Said plainly, because a record that oversells itself is worth less than one that
+      does not:</p>
+    <ul>
+      <li><b>The free path has no on-chain link between a login and a payment.</b> It rests on
+        the fact that only you can write in your own profile repository. That is a real
+        guarantee, but it is GitHub&rsquo;s, not the chain&rsquo;s. The registry path is the one
+        where the link is signed.</li>
+      <li><b>The history reads the last 30 commits that touched your README.</b> Older changes
+        than that are not reconstructed.</li>
+      <li><b>This is a testnet.</b> The ETH comes from a faucet, so the amounts mean nothing.
+        What means something is who paid, for which merged pull request, and that neither can
+        be edited afterwards.</li>
+      <li><b>A funder who never pays anyone else is one opinion, not a reputation.</b> The
+        distinct-funder count is there so you can see that for yourself.</li>
+    </ul>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     <b style="color:var(--muted)">MERGIT</b> — Merge it. Get paid. ·

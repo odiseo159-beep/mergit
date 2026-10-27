@@ -41,6 +41,10 @@
   ],
   "rewrites": [
     {
+      "source": "/record/:file",
+      "destination": "/api/record?file=:file"
+    },
+    {
       "source": "/p/:login",
       "destination": "/p?login=:login"
     },

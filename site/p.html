@@ -120,6 +120,14 @@ footer a:hover{color:var(--ink)}
 .cp{margin-top:12px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
   background:none;border:1px solid var(--line);color:var(--ink);padding:9px 14px;cursor:pointer}
 .cp:hover{border-color:var(--red);color:var(--red)}
+
+/* El boton de comprobar la evidencia. Discreto a proposito: es una herramienta
+   de auditoria, no una llamada a la accion. */
+.chk{font:inherit;font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+  background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:6px;
+  padding:5px 11px;cursor:pointer}
+.chk:hover{color:var(--ink);border-color:var(--red)}
+td.ev{white-space:nowrap;line-height:1.5}
 </style>
 </head>
 <body>
@@ -203,7 +211,7 @@ footer a:hover{color:var(--ink)}
 </footer>
 
 <script type="module">
-import { encodeFunctionData, decodeFunctionResult } from "https://esm.sh/viem@2.21.55";
+import { encodeFunctionData, decodeFunctionResult, keccak256, toHex } from "https://esm.sh/viem@2.21.55";
 
 const RPC = "https://sepolia-rpc.giwa.io";
 const EXPLORER = "https://sepolia-explorer.giwa.io";
@@ -326,6 +334,142 @@ async function walletFromProfile(login) {
   return { wallet: unique[0], source: "profile", where: `${login}/${login} README` };
 }
 
+/**
+ * Las wallets que este login tuvo, y la ventana en la que tuvo cada una.
+ *
+ * El camino gratis no deja ningún vínculo on-chain entre el login y el pago: la
+ * página resuelve la wallet de hoy. Si alguien cambia la dirección de su README,
+ * su historial se iba con ella, que para un expediente de trabajo es fatal.
+ *
+ * Esto lee el historial de commits de `login/login` y reconstruye qué dirección
+ * estuvo publicada en cada momento.
+ *
+ * **Lo importante es la ventana, no la lista.** Juntar "todas las direcciones
+ * que alguna vez aparecieron" sería un regalo: cualquiera pone la dirección de
+ * otro durante un commit, la quita, y se cuelga su historial. Aquí una dirección
+ * solo cuenta para los pagos que ocurrieron **mientras estaba publicada**.
+ *
+ * Una llamada a la API de GitHub para la lista de commits; el contenido de cada
+ * versión sale de raw.githubusercontent.com, que no gasta esa cuota.
+ */
+async function walletWindows(login) {
+  const ventanas = [];
+  try {
+    const r = await fetch(`${GH}/repos/${encodeURIComponent(login)}/${encodeURIComponent(login)}/commits?path=README.md&per_page=30`);
+    if (!r.ok) return ventanas;
+    const commits = await r.json();
+    if (!Array.isArray(commits) || !commits.length) return ventanas;
+
+    // del más viejo al más nuevo, para poder cerrar cada ventana con la siguiente
+    const orden = commits.slice().reverse();
+    let anterior = null;
+    for (const c of orden) {
+      const sha = c.sha;
+      const cuando = Date.parse(c.commit?.committer?.date || c.commit?.author?.date || 0) / 1000;
+      let texto = "";
+      try {
+        const raw = await fetch(`https://raw.githubusercontent.com/${encodeURIComponent(login)}/${encodeURIComponent(login)}/${sha}/README.md`);
+        if (raw.ok) texto = await raw.text();
+      } catch { /* una versión ilegible no inventa una wallet */ }
+
+      const halladas = new Set();
+      for (const linea of texto.split(/[\r\n]+/)) {
+        if (!/mergit/i.test(linea)) continue;
+        const m = linea.match(/0x[a-fA-F0-9]{40}/);
+        if (m) halladas.add(m[0].toLowerCase());
+      }
+      const wallet = halladas.size === 1 ? [...halladas][0] : null;
+
+      if (anterior && anterior.wallet !== wallet) anterior.hasta = cuando;
+      if (!anterior || anterior.wallet !== wallet) {
+        anterior = { wallet, desde: cuando, hasta: Infinity };
+        if (wallet) ventanas.push(anterior);
+      }
+    }
+  } catch { /* sin historial, se queda solo la wallet de hoy */ }
+  return ventanas;
+}
+
+/**
+ * Rehacer el `evidenceHash` de un pago desde el pull request que lo provocó.
+ *
+ * Es la única línea del expediente que no puede inflar nadie. El hash que viaja
+ * dentro de `BountySettled` se calcula sobre el repositorio, el número del pull
+ * request, el autor, el commit del head, el merge y los checks del CI
+ * (`agent/verify.mjs`). Si vuelve a salir el mismo número, ese pago está atado a
+ * ese trabajo y a ese autor, y para cambiarlo habría que cambiar la cadena.
+ *
+ * Corre al pulsar, nunca al cargar: gasta tres o cuatro llamadas a la API de
+ * GitHub y el límite sin autenticar es de 60 por hora.
+ *
+ * Si no cuadra **no se acusa a nadie**. Un repositorio puede haber corrido un
+ * workflow nuevo sobre el mismo commit después del pago, y entonces el conjunto
+ * de checks ya no es el de aquel día. Eso no es un fraude, es que el hash se
+ * calculó antes.
+ */
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonical(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+async function reproducirEvidencia(bountyId, uri, hashEnCadena) {
+  const api = async (path) => {
+    const r = await fetch(GH + path, { headers: { Accept: "application/vnd.github+json" } });
+    if (r.status === 403) throw new Error("GitHub rate-limited this browser. Try again in a few minutes.");
+    if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+    return r.json();
+  };
+
+  const m = String(uri || "").match(/github\.com\/([^/\s]+)\/([^/#?\s]+)/i);
+  if (!m) return { ok: false, reason: "the bounty does not say which repository it was for" };
+  const [, owner, repo] = m;
+
+  // La búsqueda de GitHub ignora la puntuación: pedir "Bounty: #3" devuelve
+  // también el pull request que dice "Bounty: #30" y hasta otros que solo
+  // tienen un 3 cerca. Quedarse con el primer resultado elegía el equivocado y
+  // la evidencia no cuadraba nunca. Hay que releer el cuerpo y exigir la línea.
+  const q = encodeURIComponent(`repo:${owner}/${repo} "Bounty: #${bountyId}" is:pr is:merged`);
+  const found = await api(`/search/issues?q=${q}`);
+  // Cadena normal, no plantilla: dentro de una plantilla el \s se queda en "s"
+  // y el patron dejaba de casar con nada.
+  const exacto = new RegExp("(^|[^0-9A-Za-z])Bounty:\\s*#?" + bountyId + "([^0-9]|$)");
+  const hit = (found.items || []).find((it) => exacto.test(String(it.body || "")));
+  if (!hit) return { ok: false, reason: `no merged pull request in ${owner}/${repo} carries the line Bounty: #${bountyId}` };
+
+  const pr = await api(`/repos/${owner}/${repo}/pulls/${hit.number}`);
+  const sha = pr.head?.sha;
+  const [runs, combined] = await Promise.all([
+    api(`/repos/${owner}/${repo}/commits/${sha}/check-runs`),
+    api(`/repos/${owner}/${repo}/commits/${sha}/status`),
+  ]);
+  const checks = [
+    ...(runs.check_runs ?? []).map((c) => ({ name: c.name, status: c.status, conclusion: c.conclusion })),
+    ...(combined.statuses ?? []).map((st) => ({ name: st.context, conclusion: st.state })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  const evidence = {
+    repository: `${owner}/${repo}`,
+    pullRequest: hit.number,
+    author: pr.user?.login ?? null,
+    headSha: sha ?? null,
+    mergeCommitSha: pr.merged ? pr.merge_commit_sha : null,
+    mergedAt: pr.merged_at ?? null,
+    baseRef: pr.base?.ref ?? null,
+    checks,
+  };
+  const recalculado = keccak256(toHex(canonical(evidence)));
+  return {
+    ok: recalculado.toLowerCase() === String(hashEnCadena || "").toLowerCase(),
+    evidence,
+    url: hit.html_url,
+    recalculado,
+    reason: "the pull request does not hash to what the chain recorded, as it looks today",
+  };
+}
+
 /** Eventos decodificados de un escrow. El explorador los entrega ya legibles. */
 async function logsOf(address) {
   const ctl = new AbortController();
@@ -352,6 +496,40 @@ function funderCell(e) {
   if (!e.funder) return '<span style="color:var(--dim)">not read</span>';
   if (e.self) return '<span style="color:var(--dim)">this wallet</span>';
   return `<a href="${EXPLORER}/address/${e.funder}" rel="noopener">${short(e.funder)}</a>`;
+}
+
+/**
+ * Qué era la tarea. Sale del `metadataURI` que guarda `postBounty`, y que el
+ * evento `BountyPosted` ya trae en la misma respuesta que esta página pide: no
+ * cuesta una sola petición más.
+ *
+ * **Ese texto lo escribe quien financia, no Mergit.** Cualquiera puede financiar
+ * un bounty de testnet, nombrarse verificador, liquidárselo a sí mismo y dejar
+ * ahí lo que quiera. Por eso se escapa siempre, solo se vuelve enlace si apunta
+ * a github.com, y la columna dice de quién es el texto.
+ */
+function taskCell(uri) {
+  const raw = String(uri || "").trim();
+  if (!raw) return '<span style="color:var(--dim)">not stated</span>';
+
+  // Varios enunciados viejos vienen sin esquema ("github.com/owner/repo"). Se le
+  // antepone https solo cuando empieza exactamente por github.com, nunca a un
+  // texto cualquiera: de ahí saldría un enlace a donde quisiera el financiador.
+  const url = /^(?:https:\/\/)?(?:www\.)?github\.com\//i.test(raw)
+    ? "https://github.com/" + raw.replace(/^(?:https:\/\/)?(?:www\.)?github\.com\//i, "")
+    : null;
+  if (url) {
+    const gh = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?\s]+)\/(issues|pull)\/(\d+)/i);
+    if (gh) {
+      const [, owner, repo, kind, num] = gh;
+      const etiqueta = `${esc(owner)}/${esc(repo)} ${kind === "pull" ? "PR #" : "#"}${esc(num)}`;
+      return `<a href="${esc(url)}" rel="noopener nofollow">${etiqueta}</a>`;
+    }
+    const corto = url.slice(19);
+    return `<a href="${esc(url)}" rel="noopener nofollow">${esc(corto.length > 42 ? corto.slice(0, 42) + "…" : corto)}</a>`;
+  }
+  const texto = raw.length > 44 ? raw.slice(0, 44) + "…" : raw;
+  return `<span title="${esc(raw)}">${esc(texto)}</span>`;
 }
 
 function tagFor(state) {
@@ -434,10 +612,33 @@ document.addEventListener("click", async (e) => {
   setTimeout(() => (b.textContent = antes), 1600);
 });
 
-function renderPayments(wallet, paid, pending) {
+function renderPayments(wallet, paid, pending, abiertos) {
   const out = $("paid-out");
   if (!paid.length && !pending.length) {
-    out.innerHTML = `<div class="empty">No settlement has reached <b>${short(wallet, 10, 8)}</b> yet.<br>A bounty pays this wallet the moment a pull request by this login is merged with green CI.</div>`;
+    // Un expediente vacío no se queda en "nada que enseñar": enseña lo que hay
+    // abierto ahora mismo. Es la única pantalla que ve alguien que todavía no
+    // cobró, y es la que tiene que decirle qué hacer.
+    //
+    // A propósito NO se enseñan los pull requests abiertos de esa persona como
+    // "en progreso": eso lo escribe quien quiere, y cualquiera rellenaría su
+    // expediente abriendo pull requests. Aquí solo cuenta lo que otro pagó.
+    const lista = (abiertos || [])
+      .sort((a, b) => a.deadline - b.deadline)
+      .slice(0, 6)
+      .map((b) => `<tr>
+        <td><b>#${esc(b.id)}</b></td>
+        <td>${taskCell(b.uri)}</td>
+        <td>escrow ${esc(b.v)}</td>
+        <td>${b.deadline ? "closes " + day(new Date(b.deadline * 1000).toISOString()) : ""}</td>
+      </tr>`).join("");
+
+    out.innerHTML = `<div class="empty">No settlement has reached <b>${short(wallet, 10, 8)}</b> yet.<br>A bounty pays this wallet the moment a pull request by this login is merged with green CI.</div>`
+      + (lista
+        ? `<div class="wrap" style="margin-top:22px"><table>
+             <thead><tr><th>Open right now</th><th>Task, as the funder described it</th><th>Contract</th><th></th></tr></thead>
+             <tbody>${lista}</tbody></table></div>
+           <p class="note">Put the <code>Bounty: #N</code> line in your pull request description. First merged, first paid.</p>`
+        : "");
     return;
   }
   const rows = [...pending, ...paid].map((e) => {
@@ -446,6 +647,7 @@ function renderPayments(wallet, paid, pending) {
     const fee = e.protocolFee ? `${eth(e.protocolFee)} ETH` : "—";
     return `<tr>
       <td><b>#${esc(e.bountyId)}</b></td>
+      <td>${taskCell(e.uri)}</td>
       <td>${tagFor(e.state)}</td>
       <td>${funderCell(e)}</td>
       <td class="amount">${amount}</td>
@@ -453,10 +655,13 @@ function renderPayments(wallet, paid, pending) {
       <td>${when}</td>
       <td>escrow ${e.v}</td>
       <td><a href="${EXPLORER}/tx/${e.tx}" rel="noopener">${short(e.tx)}</a></td>
+      <td class="ev">${e.evidenceHash && e.uri
+        ? `<button class="chk" data-bounty="${esc(e.bountyId)}" data-uri="${esc(e.uri)}" data-hash="${esc(e.evidenceHash)}">check</button>`
+        : '<span style="color:var(--dim)">&mdash;</span>'}</td>
     </tr>`;
   }).join("");
   out.innerHTML = `<div class="wrap"><table>
-    <thead><tr><th>Bounty</th><th>State</th><th>Funded by</th><th>To the developer</th><th>Protocol fee</th><th>Date</th><th>Contract</th><th>Transaction</th></tr></thead>
+    <thead><tr><th>Bounty</th><th>Task, as the funder described it</th><th>State</th><th>Funded by</th><th>To the developer</th><th>Protocol fee</th><th>Date</th><th>Contract</th><th>Transaction</th><th>Evidence</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -520,8 +725,24 @@ async function load() {
 
   // Los pagos: los dos escrows, con la etiqueta de cuál fue.
   const want = claim.wallet.toLowerCase();
+
+  // Las wallets anteriores de este login, cada una con su ventana. Solo se
+  // consultan en el camino gratis, que es el único donde el vínculo entre login
+  // y wallet vive en un archivo que se puede editar.
+  //
+  // La wallet de hoy vale siempre; una anterior solo vale para los pagos que
+  // ocurrieron mientras estaba publicada. Esto solo puede añadir pagos que son
+  // demostrablemente suyos, nunca quitar ninguno de los que ya se veían.
+  const ventanas = claim.source === "profile" ? await walletWindows(login) : [];
+  const esSuya = (dev, cuando) => {
+    const w = String(dev || "").toLowerCase();
+    if (w === want) return true;
+    const t = Date.parse(cuando || 0) / 1000;
+    return ventanas.some((v) => v.wallet === w && t >= v.desde && t < v.hasta);
+  };
   const paid = [];
   const pending = [];
+  const abiertos = [];
   let reached = 0;
   for (const { v, address, from } of ESCROWS) {
     try {
@@ -530,15 +751,35 @@ async function load() {
       // Quién puso el dinero de cada bounty. Sin esto, cualquiera puede financiar
       // un bounty, pagárselo a sí mismo y aparecer aquí como si hubiera cobrado
       // por trabajo ajeno. Es exactamente la farmeada que este expediente niega.
+      // De cada bounty publicado se guarda quién puso el dinero, qué decía el
+      // enunciado y hasta cuándo valía. Los tres salen del mismo evento.
       const funders = new Map();
-      for (const e of events) if (e.kind === "BountyPosted") funders.set(String(e.bountyId), (e.funder ?? "").toLowerCase());
+      const puestos = new Map();
       for (const e of events) {
-        if (e.developer?.toLowerCase() !== want) continue;
+        if (e.kind !== "BountyPosted") continue;
+        funders.set(String(e.bountyId), (e.funder ?? "").toLowerCase());
+        puestos.set(String(e.bountyId), { uri: e.metadataURI, deadline: Number(e.deadline || 0), v });
+      }
+      // Un bounty sigue abierto si nadie lo liquidó ni lo devolvió y el plazo no venció.
+      const cerrados = new Set();
+      for (const e of events) {
+        if (e.kind === "BountySettled" || e.kind === "BountyRefunded") cerrados.add(String(e.bountyId));
+      }
+      const ahora = Math.floor(Date.now() / 1000);
+      for (const [id, b] of puestos) {
+        if (cerrados.has(id) || Number(id) < from) continue;
+        if (b.deadline && b.deadline <= ahora) continue;
+        abiertos.push({ id, ...b });
+      }
+      for (const e of events) {
+        if (!esSuya(e.developer, e.time)) continue;
         if (Number(e.bountyId) < from) continue;
         const funder = funders.get(String(e.bountyId)) ?? "";
         const self = funder === want;
-        if (e.kind === "BountySettled") paid.push({ ...e, v, funder, self, state: self ? "self" : "paid" });
-        if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, state: "pending" });
+        const uri = (puestos.get(String(e.bountyId)) || {}).uri;
+        const antigua = String(e.developer || "").toLowerCase() !== want;
+        if (e.kind === "BountySettled") paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : "paid" });
+        if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, uri, antigua, state: "pending" });
       }
     } catch {
       // un escrow que no responde no puede inventar un pago: se cuenta como no leído
@@ -550,7 +791,7 @@ async function load() {
 
   paid.sort((a, b) => Number(b.block) - Number(a.block));
   stillPending.sort((a, b) => Number(b.block) - Number(a.block));
-  renderPayments(claim.wallet, paid, stillPending);
+  renderPayments(claim.wallet, paid, stillPending, abiertos);
 
   // El titular solo cuenta lo que pagó otro. Lo que alguien se paga a sí mismo
   // se muestra, porque está en la cadena, pero no suma a su historial.
@@ -587,9 +828,33 @@ async function load() {
   $("paid-note").textContent = reached !== ESCROWS.length
     ? "One of the two escrows did not answer, so this list may be incomplete. Reload in a moment."
     : claim.source === "profile"
-      ? "The record follows the wallet, not the person. Change the address in your README and the payments listed here change with it."
+      ? "The record follows every address this login has published, not just today's. Change the address in your README and what you were already paid stays here."
       : "Payments made before this login was claimed may have gone to a different address, and would not appear here. The record follows the wallet in the registry, not the person.";
+  if (ventanas.length > 1) {
+    $("paid-note").textContent = "This login has used more than one address. A payment to an older one counts only if it was published in the README when the payment happened, so nobody can claim somebody else's history by pasting their address for a commit.";
+  }
 }
+
+// Comprobar la evidencia se hace al pulsar, fila por fila. Delegado, porque la
+// tabla se vuelve a pintar entera cada vez que carga la página.
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest(".chk");
+  if (!b) return;
+  const celda = b.parentElement;
+  celda.textContent = "checking…";
+  try {
+    const r = await reproducirEvidencia(b.dataset.bounty, b.dataset.uri, b.dataset.hash);
+    if (r.ok) {
+      const e = r.evidence;
+      celda.innerHTML = `${tagFor("paid").replace("Paid", "Reproduced")}<br>`
+        + `<a href="${esc(r.url)}" rel="noopener">PR #${esc(e.pullRequest)}</a> by @${esc(e.author)}`;
+    } else {
+      celda.innerHTML = `<span class="tag"><i></i>Not reproduced</span><br><span style="color:var(--dim)">${esc(r.reason)}</span>`;
+    }
+  } catch (err) {
+    celda.innerHTML = `<span style="color:var(--dim)">${esc(err.message)}</span>`;
+  }
+});
 
 $("find").addEventListener("submit", (e) => {
   e.preventDefault();
