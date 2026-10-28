@@ -7,6 +7,20 @@ const FEE_BPS = 150n; // 1.5% — la comisión que anuncia el pitch
 const BPS = 10_000n;
 
 describe("MergitEscrow", async () => {
+  describe("Pruebas de Reentrancy (Bounty #2)", () => {
+    it("debe bloquear ataques de reentrancy en settle", async () => {
+      const attacker = await viem.deployContract("MergitReentrancyAttacker", [escrow.address]);
+      const deadline = await futureDeadline(86400);
+      await escrow.write.postBounty([attacker.address, deadline, "ipfs://reentrancy"], {
+        value: parseEther("1.0"),
+        account: funder.account,
+      });
+      const bountyId = (await escrow.read.nextBountyId()) - 1n;
+      await assert.doesNotReject(attacker.write.triggerAttackSettle([bountyId]));
+      const bountyData = await escrow.read.getBounty([bountyId]);
+      assert.equal(bountyData.status, 2);
+    });
+  });
   const { viem, networkHelpers } = await network.connect();
 
   let escrow, funder, verifier, developer, stranger, feeRecipient, publicClient;
