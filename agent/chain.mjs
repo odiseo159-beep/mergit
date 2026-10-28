@@ -167,18 +167,105 @@ export const ABI_V2 = [
   },
 ];
 
+// La v3 es la v2 con el plazo movible. Cambian tres cosas y hay que declararlas
+// las tres, o el agente decodifica mal lo que lee: el struct lleva `maxDeadline`,
+// `postBounty` lo recibe, y `BountyPosted` lo emite.
+export const ABI_V3 = [
+  ...ABI_V2.filter((x) => !["postBounty", "getBounty", "BountyPosted"].includes(x.name)),
+  {
+    type: "event",
+    name: "BountyPosted",
+    inputs: [
+      { name: "bountyId", type: "uint256", indexed: true },
+      { name: "funder", type: "address", indexed: true },
+      { name: "verifier", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "deadline", type: "uint64", indexed: false },
+      { name: "maxDeadline", type: "uint64", indexed: false },
+      { name: "challengeWindow", type: "uint32", indexed: false },
+      { name: "metadataURI", type: "string", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "DeadlineExtended",
+    inputs: [
+      { name: "bountyId", type: "uint256", indexed: true },
+      { name: "by", type: "address", indexed: true },
+      { name: "previousDeadline", type: "uint64", indexed: false },
+      { name: "newDeadline", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    type: "function",
+    name: "postBounty",
+    stateMutability: "payable",
+    inputs: [
+      { name: "verifier", type: "address" },
+      { name: "deadline", type: "uint64" },
+      { name: "maxDeadline", type: "uint64" },
+      { name: "challengeWindow", type: "uint32" },
+      { name: "metadataURI", type: "string" },
+    ],
+    outputs: [{ name: "bountyId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getBounty",
+    stateMutability: "view",
+    inputs: [{ name: "bountyId", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "funder", type: "address" },
+          { name: "verifier", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "deadline", type: "uint64" },
+          { name: "maxDeadline", type: "uint64" },
+          { name: "challengeWindow", type: "uint32" },
+          { name: "status", type: "uint8" },
+          { name: "developer", type: "address" },
+          { name: "claimableAt", type: "uint64" },
+          { name: "challenged", type: "bool" },
+          { name: "evidenceHash", type: "bytes32" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "extend",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "bountyId", type: "uint256" }, { name: "newDeadline", type: "uint64" }],
+    outputs: [],
+  },
+];
+
 export const publicClient = createPublicClient({ chain: giwaSepolia, transport: http() });
 
 /**
  * Qué contrato hay en esa dirección. Se pregunta a la cadena en vez de
  * configurarlo: solo la v2 responde MAX_CHALLENGE_WINDOW.
  */
+/**
+ * Qué versión de escrow hay en esa dirección.
+ *
+ * La v3 no se distingue por una función nueva: `extend` no se puede consultar
+ * sin llamarla. Se distingue por la forma de lo que devuelve `getBounty`, que
+ * lleva un campo más. Decodificar una respuesta de la v2 con el ABI de la v3
+ * falla, así que se prueba la v3 primero y se cae hacia atrás.
+ */
 export async function escrowFlavor(address) {
   try {
+    await publicClient.readContract({ address, abi: ABI_V3, functionName: "getBounty", args: [1n] });
+    return { v3: true, v2: true, abi: ABI_V3, status: STATUS_V2 };
+  } catch { /* no es v3 */ }
+  try {
     await publicClient.readContract({ address, abi: ABI_V2, functionName: "MAX_CHALLENGE_WINDOW" });
-    return { v2: true, abi: ABI_V2, status: STATUS_V2 };
+    return { v3: false, v2: true, abi: ABI_V2, status: STATUS_V2 };
   } catch {
-    return { v2: false, abi: ABI, status: STATUS };
+    return { v3: false, v2: false, abi: ABI, status: STATUS };
   }
 }
 
