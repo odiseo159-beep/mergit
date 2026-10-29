@@ -26,6 +26,7 @@ import { readFileSync, appendFileSync } from "node:fs";
 import { formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { settleBounty } from "./settle.mjs";
+import { escrowAddress } from "./chain.mjs";
 import { resolveWallet, registryAddress } from "./registry.mjs";
 import { listBounties, isLive, closedIssues, bountyForIssue } from "./bounties.mjs";
 
@@ -59,7 +60,11 @@ const say = (line) => {
 
 // ───────────────────── 1. ¿Qué commit disparó esto? ──────────────────
 
-const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+// En Actions siempre hay payload. Fuera de Actions no, y un ensayo local con
+// MERGIT_PR no necesita ninguno: no hay que morir por un fichero que no toca.
+const payload = process.env.GITHUB_EVENT_PATH
+  ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"))
+  : {};
 // Un número de PR pasado a mano gana sobre el evento: sirve para reintentar una corrida.
 const asked = Number(process.env.MERGIT_PR || payload.inputs?.pr) || null;
 let sha;
@@ -90,9 +95,19 @@ const registryFunders = await loadFunders(repoInfo.default_branch);
 // Los bounties vivos, una vez por corrida. Sirven para dos cosas: comprobar que
 // el número que escribió el autor todavía vale, y resolverlo desde el issue
 // cuando no vale o cuando no lo escribió.
+//
+// ⚠️ **Solo los del escrow donde esta corrida va a liquidar.** `settleBounty`
+// paga en `escrowAddress()` y en ninguno más, mientras que `listBounties()` lee
+// todos los despliegues, y los números se repiten entre uno y otro: hay un
+// bounty #1 en la v1 y otro #1 en la v2. Sin este filtro, resolver un bounty en
+// un escrow y liquidar su número en otro es un pago al bounty equivocado.
 let catalogo = [];
 try {
-  catalogo = await listBounties();
+  const donde = escrowAddress().toLowerCase();
+  const todos = await listBounties();
+  catalogo = todos.filter((b) => b.address.toLowerCase() === donde);
+  const fuera = todos.length - catalogo.length;
+  if (fuera) console.log(`(${fuera} bounties quedan fuera: están en otro escrow, y este agente liquida en ${donde})`);
 } catch (e) {
   console.log(`(no se pudo leer el catálogo de bounties: ${e.message})`);
 }
@@ -157,7 +172,9 @@ for (const pr of prs) {
     if (pr.merged_at) await comment(pr.number, `**Mergit did not pay this pull request.** ${who.reason}, so there is nowhere to send bounty #${bountyId}.`);
     continue;
   }
-  say(`${tag}: paying @${author} at ${developer} (${who.source === "registry" ? `claimed on-chain, proof in ${who.proof}` : "from mergit.json"}).`);
+  // `paidVia` y no un ternario: decir "from mergit.json" cuando la wallet vino
+  // del README de perfil es mentir en el registro de la corrida.
+  say(`${tag}: paying @${author} at ${developer} (${paidVia(who, author)}).`);
 
   const r = await settleBounty({ bountyId, target: { owner: OWNER, repo: NAME, number: pr.number }, developer, send: SEND });
   const v = r.verdict;
