@@ -16,11 +16,16 @@
 // lo que llega al correo. Edita el cuerpo siempre, y **solo comenta cuando hay
 // algo urgente**, para que el aviso signifique algo.
 
+//
+// ⚠️ Un pull request puede reclamar un bounty de dos maneras: con la línea
+// `Bounty: #N` o cerrando el issue que el bounty financia. **Las dos cuentan**,
+// y por eso esto importa `agent/bounties.mjs` en vez de buscar solo la línea.
+// Mirando solo la línea, un bounty repuesto —que es el caso que hizo falta este
+// vigilante— se vería como un bounty que nadie tomó, justo cuando media docena
+// de personas lo están esperando.
+import { listBounties, isLive, closedIssues, pointsAtIssue } from "../agent/bounties.mjs";
+
 const EXPLORER = "https://sepolia-explorer.giwa.io";
-const ESCROWS = [
-  { v: "v1", address: "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879" },
-  { v: "v2", address: "0x48d506080abdbed11f1acbe40f799301d9612ad5" },
-];
 const MARCA = "<!-- mergit-watchdog -->";
 
 const {
@@ -29,6 +34,9 @@ const {
   HORAS = "72",
   MERGIT_VERIFIER = "",
   DRY_RUN = "",
+  // El escrow donde liquida este repositorio. Avisar de un bounty que el agente
+  // no puede pagar es avisar de nada.
+  MERGIT_ESCROW = "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879",
 } = process.env;
 
 const seco = DRY_RUN === "1";
@@ -59,41 +67,30 @@ async function logsOf(address) {
 }
 
 async function bountiesVivos() {
-  const todos = new Map();
-  for (const { v, address } of ESCROWS) {
-    let ev;
-    try { ev = await logsOf(address); } catch { continue; }
-    for (const e of ev) {
-      if (e.kind !== "BountyPosted") continue;
-      todos.set(v + "#" + e.bountyId, {
-        id: String(e.bountyId), v,
-        verifier: String(e.verifier || "").toLowerCase(),
-        deadline: Number(e.deadline || 0),
-        uri: e.metadataURI || "",
-        cerrado: false,
-      });
-    }
-    for (const e of ev) {
-      if (e.kind !== "BountySettled" && e.kind !== "BountyRefunded") continue;
-      const b = todos.get(v + "#" + e.bountyId);
-      if (b) b.cerrado = true;
-    }
-  }
-  return [...todos.values()].filter((b) =>
-    !b.cerrado && b.deadline * 1000 > Date.now()
+  const aqui = MERGIT_ESCROW.toLowerCase();
+  return (await listBounties()).filter((b) =>
+    b.address.toLowerCase() === aqui && isLive(b)
     && (!MERGIT_VERIFIER || b.verifier === MERGIT_VERIFIER.toLowerCase()));
 }
 
 const reBounty = (id) => new RegExp("^[ \\t]*bounty:[ \\t]*#?" + id + "[ \\t]*$", "im");
 
+/** ¿Este pull request reclama este bounty? Por la línea o por el issue que cierra. */
+const reclama = (pr, b) => {
+  const body = String(pr.body || "");
+  if (reBounty(b.id).test(body)) return true;
+  return closedIssues(body).some((n) => pointsAtIssue(b.uri, owner, repo, n));
+};
+
 async function main() {
   const vivos = await bountiesVivos();
   const abiertos = await gh("/repos/" + owner + "/" + repo + "/pulls?state=open&per_page=100");
+  const candidatosDe = (b) => (abiertos || []).filter((p) => reclama(p, b));
 
   const urgentes = [];
   for (const b of vivos) {
     const falta = b.deadline * 1000 - Date.now();
-    const candidatos = (abiertos || []).filter((p) => reBounty(b.id).test(String(p.body || "")));
+    const candidatos = candidatosDe(b);
     if (falta <= umbral && candidatos.length) urgentes.push({ b, candidatos, falta });
   }
 
@@ -109,7 +106,7 @@ async function main() {
   if (urgentes.length) {
     lineas.push("### Bounties about to expire with work waiting", "");
     for (const u of urgentes) {
-      lineas.push("- **Bounty #" + u.b.id + "** (escrow " + u.b.v + ") closes in **" + horas(u.falta) + " h**, and "
+      lineas.push("- **Bounty #" + u.b.id + "** (escrow " + u.b.escrow + ") closes in **" + horas(u.falta) + " h**, and "
         + u.candidatos.length + " open pull request" + (u.candidatos.length === 1 ? "" : "s") + " claim" + (u.candidatos.length === 1 ? "s" : "") + " it: "
         + u.candidatos.map((p) => "#" + p.number).join(", ")
         + ". After the deadline the contract refuses to settle, and the only way out is a refund.");
@@ -127,10 +124,11 @@ async function main() {
   }
 
   const estado = vivos.length
-    ? vivos.map((b) => "- Bounty **#" + b.id + "** (" + b.v + "), " + horas(b.deadline * 1000 - Date.now()) + " h left"
-        + ((abiertos || []).filter((p) => reBounty(b.id).test(String(p.body || ""))).length
-          ? ", claimed by " + (abiertos || []).filter((p) => reBounty(b.id).test(String(p.body || ""))).map((p) => "#" + p.number).join(", ")
-          : ", nobody has claimed it yet")).join("\n")
+    ? vivos.map((b) => {
+        const c = candidatosDe(b);
+        return "- Bounty **#" + b.id + "** (" + b.escrow + "), " + horas(b.deadline * 1000 - Date.now()) + " h left"
+          + (c.length ? ", claimed by " + c.map((p) => "#" + p.number).join(", ") : ", nobody has claimed it yet");
+      }).join("\n")
     : "- No bounty is open right now.";
 
   const cuerpo = [
