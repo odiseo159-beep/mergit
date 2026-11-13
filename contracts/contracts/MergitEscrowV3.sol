@@ -45,11 +45,12 @@ pragma solidity 0.8.24;
 ///         aunque el bounty tuviera ventana. Así la objeción sirve para corregir un
 ///         error, no para no pagar nunca.
 ///
-///         Lo que sigue sin resolver, y conviene decirlo: si el financiador objeta
-///         con el plazo casi vencido, puede pedir el reembolso antes de que el
-///         verificador vuelva a liquidar. Cerrar esa carrera pide un árbitro, que es
-///         justo la figura que Mergit intenta no tener. Por ahora la mitigación es
-///         que la objeción es única y que volver a liquidar es inmediato.
+///         La objeción ya no sirve para quedarse con el dinero: si el financiador
+///         objeta cuando al plazo le queda menos de una ventana de objeción, el
+///         plazo se mueve a `block.timestamp + challengeWindow` y el verificador
+///         tiene otra ventana para volver a liquidar. El tope se sube con él si
+///         hiciera falta. Así la objeción sigue siendo un control, no una vía de
+///         reembolso anticipado.
 ///
 ///         Sigue sin owner, sin pausa y sin upgradabilidad. La comisión se fija en el
 ///         constructor, con el mismo techo del 5%.
@@ -280,7 +281,10 @@ contract MergitEscrowV3 {
 
     /// @notice El financiador objeta el pago propuesto. Solo una vez por bounty.
     /// @dev    El bounty vuelve a estar abierto y el verificador puede liquidar otra
-    ///         vez; esa segunda liquidación ya no espera.
+    ///         vez; esa segunda liquidación ya no espera. Si al plazo le queda menos
+    ///         de una ventana de objeción, se mueve hacia adelante para que el
+    ///         verificador tenga tiempo de reaccionar. El tope sube con él si el
+    ///         nuevo plazo lo deja atrás.
     function challenge(uint256 bountyId) external {
         Bounty storage b = _bounties[bountyId];
 
@@ -296,6 +300,16 @@ contract MergitEscrowV3 {
         b.developer = address(0);
         b.claimableAt = 0;
         b.evidenceHash = bytes32(0);
+
+        // Si la objeción llega con el plazo encima, el verificador necesita otra
+        // ventana para volver a liquidar. El plazo solo se mueve hacia adelante.
+        uint64 previousDeadline = b.deadline;
+        if (uint256(b.deadline) < block.timestamp + b.challengeWindow) {
+            uint64 newDeadline = uint64(block.timestamp) + b.challengeWindow;
+            b.deadline = newDeadline;
+            if (newDeadline > b.maxDeadline) b.maxDeadline = newDeadline;
+            emit DeadlineExtended(bountyId, msg.sender, previousDeadline, newDeadline);
+        }
 
         emit SettlementChallenged(bountyId, msg.sender, proposed);
     }

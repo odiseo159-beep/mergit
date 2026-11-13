@@ -174,4 +174,82 @@ describe("MergitEscrowV3 · extender el plazo", async () => {
     assert.equal(Number(ev[0].args.previousDeadline), antes);
     assert.equal(Number(ev[0].args.newDeadline), antes + DIA);
   });
+
+  // ── la objeción ya no regala el reembolso ────────────────────
+
+  it("la objeción después del plazo mueve el plazo y cierra el reembolso anticipado", async () => {
+    await post(1, 7, 3600);
+    const deadline = await plazo(1n);
+
+    // Liquidamos media hora antes del plazo: la ventana de objeción termina
+    // media hora después del plazo.
+    const t = await ahora();
+    await networkHelpers.time.increase(deadline - t - 1800);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+
+    // Pasamos el plazo original pero seguimos dentro de la ventana de objeción.
+    await networkHelpers.time.increase(1801);
+    assert.ok((await ahora()) > deadline);
+
+    const hash = await escrow.write.challenge([1n]);
+    await publicClient.waitForTransactionReceipt({ hash });
+
+    const nuevoPlazo = await plazo(1n);
+    assert.ok(nuevoPlazo > deadline);
+
+    // El reembolso ya no se puede adelantar.
+    await assert.rejects(escrow.write.refund([1n]), /TooEarly/);
+
+    // El verificador puede volver a liquidar dentro del nuevo plazo.
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    assert.equal((await escrow.read.getBounty([1n])).status, 3); // Settled
+  });
+
+  it("si el plazo está lejos, la objeción no lo mueve", async () => {
+    await post(5, 9, 3600);
+    const deadline = await plazo(1n);
+    const topeAntes = await tope(1n);
+
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await escrow.write.challenge([1n]);
+
+    assert.equal(await plazo(1n), deadline);
+    assert.equal(await tope(1n), topeAntes);
+    assert.equal((await escrow.getEvents.DeadlineExtended()).length, 0);
+  });
+
+  it("la objeción sube el tope si el nuevo plazo lo deja atrás", async () => {
+    await post(1, 1, 3600);
+    const deadline = await plazo(1n);
+
+    const t = await ahora();
+    await networkHelpers.time.increase(deadline - t - 1800);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await networkHelpers.time.increase(1801);
+
+    await escrow.write.challenge([1n]);
+
+    const nuevoPlazo = await plazo(1n);
+    assert.ok(nuevoPlazo > deadline);
+    assert.equal(await tope(1n), nuevoPlazo);
+  });
+
+  it("pasado el nuevo plazo, el financiador sí puede reembolsarse", async () => {
+    await post(1, 7, 3600);
+    const deadline = await plazo(1n);
+
+    const t = await ahora();
+    await networkHelpers.time.increase(deadline - t - 1800);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await networkHelpers.time.increase(1801);
+
+    await escrow.write.challenge([1n]);
+    const nuevoPlazo = await plazo(1n);
+
+    const t2 = await ahora();
+    await networkHelpers.time.increase(nuevoPlazo - t2 + 1);
+    await escrow.write.refund([1n]);
+
+    assert.equal((await escrow.read.getBounty([1n])).status, 4); // Refunded
+  });
 });
