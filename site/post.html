@@ -77,6 +77,10 @@ button:hover:not(:disabled){background:#ff4a4a}
 button:disabled{background:transparent;color:var(--dim);border-color:var(--line);cursor:not-allowed}
 button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
 button.ghost:hover:not(:disabled){border-color:var(--ink);background:transparent}
+button .sn{display:inline-block;margin-right:10px;opacity:.7}
+button.done{background:transparent;color:#3ddc84;border-color:#3ddc84;cursor:default}
+#connect + #submit{margin-top:12px}
+#flowhint b{color:var(--ink);font-weight:500}
 
 aside{font-family:var(--mono);font-size:13px;line-height:1.75}
 aside h2{font-family:var(--sans);font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:14px}
@@ -123,6 +127,7 @@ footer a:hover{color:var(--ink)}
   </a>
   <span class="right">
     <span id="net"><i class="dot" id="netdot"></i> not connected</span>
+    <a href="/me">Your bounties</a>
     <a href="/start">Start merging</a>
     <a href="/docs">Docs</a>
   </span>
@@ -172,8 +177,11 @@ footer a:hover{color:var(--ink)}
       <input id="verifier" name="verifier" value="0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b">
       <p class="hint">The agent allowed to release this bounty. Its only power is naming who gets paid.</p>
 
-      <button type="button" id="connect">Connect wallet</button>
-      <button type="submit" id="submit" disabled>Lock the bounty</button>
+      <!-- Dos pasos, pero un solo clic basta: "Lock" conecta la wallet si hace falta y
+           sigue solo hasta la firma. El 1 queda para quien quiera conectar antes. -->
+      <button type="button" id="connect" class="ghost"><span class="sn">1</span> Connect wallet</button>
+      <button type="submit" id="submit"><span class="sn">2</span> Lock the bounty</button>
+      <p class="hint" id="flowhint">Not connected yet? Press <b>Lock the bounty</b>: it connects your wallet first, then asks you to sign. One click.</p>
     </form>
 
     <aside>
@@ -289,29 +297,58 @@ async function ensureChain(eth) {
   }
 }
 
-$("connect").addEventListener("click", async () => {
+/** Pinta el paso 1 como hecho, o lo devuelve a pendiente. */
+function showAccount(addr) {
+  account = addr;
+  if (addr) {
+    $("netdot").classList.add("on");
+    $("net").innerHTML = `<i class="dot on"></i> ${addr.slice(0, 6)}…${addr.slice(-4)} · GIWA Sepolia`;
+    $("connect").innerHTML = `<span class="sn">✓</span> ${addr.slice(0, 6)}…${addr.slice(-4)} connected`;
+    $("connect").classList.add("done");
+    $("connect").disabled = true;
+    $("flowhint").hidden = true;
+  } else {
+    $("net").innerHTML = `<i class="dot" id="netdot"></i> not connected`;
+    $("connect").innerHTML = `<span class="sn">1</span> Connect wallet`;
+    $("connect").classList.remove("done");
+    $("connect").disabled = false;
+    $("flowhint").hidden = false;
+  }
+}
+
+/** Paso 1. Devuelve la cuenta, o null si no se pudo; el error ya queda dicho. */
+async function connectWallet() {
   const eth = window.ethereum;
   if (!eth) {
     say("No wallet found in this browser. Install MetaMask, or any EIP-1193 wallet, and reload.", "line err");
-    return;
+    return null;
   }
   try {
     const [addr] = await eth.request({ method: "eth_requestAccounts" });
     await ensureChain(eth);
-    account = addr;
-    $("netdot").classList.add("on");
-    $("net").innerHTML = `<i class="dot on"></i> ${addr.slice(0, 6)}…${addr.slice(-4)} · GIWA Sepolia`;
-    $("connect").textContent = "Wallet connected";
-    $("connect").disabled = true;
-    $("submit").disabled = false;
+    showAccount(addr);
+    return addr;
   } catch (e) {
     say(`Could not connect: ${e.shortMessage ?? e.message}`, "line err");
+    return null;
   }
-});
+}
+
+$("connect").addEventListener("click", connectWallet);
+
+// Quien ya autorizó esta página antes no tiene que repetir el paso 1: eth_accounts
+// no abre ninguna ventana, solo dice si la wallet ya nos conoce.
+if (window.ethereum) {
+  window.ethereum.request({ method: "eth_accounts" })
+    .then(([addr]) => { if (addr) showAccount(addr); })
+    .catch(() => {});
+  window.ethereum.on?.("accountsChanged", ([addr]) => showAccount(addr ?? null));
+}
 
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!account) return;
+  // Paso 2 sin paso 1: se conecta aquí mismo y se sigue, sin pedir otro clic.
+  if (!account && !(await connectWallet())) return;
 
   const uri = $("uri").value.trim();
   // Desde v1.4 el agente solo paga un bounty cuyo enunciado apunte al
@@ -353,6 +390,10 @@ $("form").addEventListener("submit", async (e) => {
   $("submit").disabled = true;
 
   try {
+    // La red se comprueba otra vez justo antes de firmar: si alguien cambió de red
+    // en la wallet después de conectar, el ETH iría a esta misma dirección pero en
+    // otra cadena, donde no hay ningún escrow.
+    await ensureChain(window.ethereum);
     const data = encodeFunctionData({ abi, functionName: "postBounty", args });
     const txHash = await window.ethereum.request({
       method: "eth_sendTransaction",
@@ -473,6 +514,18 @@ $("form").addEventListener("submit", async (e) => {
       revisar(v);
     }, 600);
   });
+
+  // /post?uri=… es el enlace "Fund this issue" que arma /me: llega con el issue
+  // ya puesto y la comprobación del repositorio corre sola. Solo se acepta una
+  // dirección de github.com; cualquier otra cosa se ignora.
+  const pre = new URLSearchParams(location.search);
+  const preUri = (pre.get("uri") || "").trim();
+  if (/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+/i.test(preUri)) {
+    $("uri").value = preUri;
+    $("uri").dispatchEvent(new Event("input"));
+  }
+  const preAmount = (pre.get("amount") || "").trim();
+  if (/^\d*\.?\d+$/.test(preAmount)) $("amount").value = preAmount;
 }
 </script>
 </body>
