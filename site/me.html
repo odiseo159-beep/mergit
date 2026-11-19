@@ -132,7 +132,7 @@ footer a:hover{color:var(--ink)}
 <main>
   <p class="kicker">Profile</p>
   <h1 id="title">Your bounties, <span class="r">both sides.</span></h1>
-  <p class="lede">What a wallet <b>funded</b> and what it <b>earned</b>, read straight from GIWA Chain. Nothing is stored here and nothing is signed unless you press <b>Refund</b> on a bounty that expired unpaid.</p>
+  <p class="lede">What a wallet <b>funded</b> and what it <b>earned</b>, read straight from GIWA Chain. Nothing is stored here and nothing is signed unless you press <b>Refund</b> on a bounty that expired unpaid, or <b>Challenge</b> on a payment still inside its objection window.</p>
 
   <div class="who">
     <div class="box">
@@ -160,7 +160,7 @@ footer a:hover{color:var(--ink)}
 
   <section id="funded-sec" hidden>
     <h2>Funded by <span class="r">this wallet.</span></h2>
-    <p class="sub">Every bounty this wallet locked, on both escrows. A bounty that passed its deadline with nobody paid can be refunded, and only by the wallet that funded it.</p>
+    <p class="sub">Every bounty this wallet locked, on both escrows. A bounty that passed its deadline with nobody paid can be refunded. On escrow v2, a proposed payment can be stopped once while its window is open. Both only by the wallet that funded it.</p>
     <div id="funded"></div>
     <div class="log" id="log"></div>
   </section>
@@ -211,8 +211,12 @@ const ESCROWS = [
   { v: "v2", address: "0x48d506080abdbed11f1acbe40f799301d9612ad5", from: 1 },
 ];
 
-const REFUND = [{ type: "function", name: "refund", stateMutability: "nonpayable",
-  inputs: [{ name: "bountyId", type: "uint256" }], outputs: [] }];
+// Las dos escrituras que esta página ofrece, y solo al financiador: recuperar un
+// bounty vencido sin pagar, y (en la v2) usar su única objeción a un pago propuesto.
+const WRITE = [
+  { type: "function", name: "refund", stateMutability: "nonpayable", inputs: [{ name: "bountyId", type: "uint256" }], outputs: [] },
+  { type: "function", name: "challenge", stateMutability: "nonpayable", inputs: [{ name: "bountyId", type: "uint256" }], outputs: [] },
+];
 const GET_V1 = [{ type: "function", name: "getBounty", stateMutability: "view",
   inputs: [{ name: "bountyId", type: "uint256" }],
   outputs: [{ type: "tuple", components: [
@@ -240,6 +244,8 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const short = (h, a = 6, b = 4) => `${h.slice(0, a)}…${h.slice(-b)}`;
 const eth = (wei) => { const s = (Number(BigInt(wei)) / 1e18).toFixed(7).replace(/0+$/, "").replace(/\.$/, ""); return s || "0"; };
 const day = (sec) => new Date(sec * 1000).toISOString().slice(0, 10);
+// Las ventanas de objeción duran horas: con la fecha sola no se sabe cuánto queda.
+const stamp = (sec) => new Date(sec * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
 const hex = (n) => "0x" + BigInt(n).toString(16);
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(String(a || "").trim());
 
@@ -454,7 +460,12 @@ async function view(addr, push) {
         try {
           const b = await call(address, v === "v2" ? GET_V2 : GET_V1, "getBounty", [BigInt(id)]);
           const st = Number(b.status);
-          if (v === "v2" && st === 2) row.state = "pending", row.claimableAt = Number(b.claimableAt);
+          if (v === "v2" && st === 2) {
+            row.state = "pending";
+            row.claimableAt = Number(b.claimableAt);
+            row.challenged = Boolean(b.challenged);
+            row.developer = b.developer;
+          }
           else if (st === OPEN) row.state = Number(b.deadline) <= now ? "due" : "open";
           else row.state = "unknown";
         } catch { row.state = "unknown"; }
@@ -485,7 +496,11 @@ async function view(addr, push) {
 function stateCell(r) {
   if (r.state === "open") return `<span class="tag open"><i></i>Open until ${day(r.deadline)}</span>`;
   if (r.state === "due") return `<span class="tag due"><i></i>Expired, unpaid</span>`;
-  if (r.state === "pending") return `<span class="tag wait"><i></i>Payment proposed${r.claimableAt ? ", final " + day(r.claimableAt) : ""}</span>`;
+  if (r.state === "pending") {
+    const to = r.developer ? ` to <a href="${EXPLORER}/address/${esc(r.developer)}" rel="noopener">${esc(short(String(r.developer)))}</a>` : "";
+    const when = r.claimableAt ? `, payable from ${stamp(r.claimableAt)}` : "";
+    return `<span class="tag wait"><i></i>Payment proposed${to}${when}</span>`;
+  }
   if (r.state === "paid") return `<span class="tag paid"><i></i>Paid to <a href="${EXPLORER}/address/${esc(r.developer)}" rel="noopener">${esc(short(String(r.developer)))}</a></span>`;
   if (r.state === "refunded") return `<span class="tag"><i></i>Refunded to you</span>`;
   return `<span class="tag"><i></i>Not read</span>`;
@@ -499,10 +514,16 @@ function renderFunded(rows) {
   const mine = account && account === viewing;
   const body = rows.map((r) => {
     let action = "";
+    const btn = (act, label) => `<button class="small" data-act="${act}" data-id="${esc(r.id)}" data-escrow="${esc(r.address)}" data-v="${esc(r.v)}" data-until="${esc(r.claimableAt ?? "")}">${label}</button>`;
     if (r.state === "due") {
-      action = mine
-        ? `<button class="small" data-refund="${esc(r.id)}" data-escrow="${esc(r.address)}" data-v="${esc(r.v)}">Refund</button>`
-        : `<span style="color:var(--dim)">the funder can refund</span>`;
+      action = mine ? btn("refund", "Refund") : `<span style="color:var(--dim)">the funder can refund</span>`;
+    }
+    if (r.state === "pending") {
+      // Las mismas tres condiciones que exige challenge() en el contrato v2.
+      const open = !r.challenged && r.claimableAt && Math.floor(Date.now() / 1000) < r.claimableAt;
+      if (r.challenged) action = `<span style="color:var(--dim)">objection already used</span>`;
+      else if (!open) action = `<span style="color:var(--dim)">window closed; anyone can finalize</span>`;
+      else action = mine ? btn("challenge", "Challenge") : `<span style="color:var(--dim)">the funder can object</span>`;
     }
     const tx = r.ctx || r.tx;
     return `<tr>
@@ -543,21 +564,34 @@ function renderEarned(rows) {
     <tbody>${body}</tbody></table></div>`;
 }
 
-/* ── Reembolso: la única escritura de la página ─────────────── */
+/* ── Reembolso y objeción: las dos escrituras de la página ──── */
 
 document.addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-refund]");
+  const b = e.target.closest("[data-act]");
   if (!b) return;
+  const act = b.dataset.act;
+  const id = b.dataset.id;
   const log = $("log");
   const say = (html, cls = "") => { const d = document.createElement("div"); if (cls) d.className = cls; d.innerHTML = html; log.appendChild(d); return d; };
   log.innerHTML = "";
-  if (!account || account !== viewing) { say("Connect the wallet that funded this bounty to refund it.", "err"); return; }
-  if (!confirm(`Refund bounty #${b.dataset.refund} (escrow ${b.dataset.v}) to ${short(account)}?\n\nIt expired with nobody paid. The whole amount comes back to this wallet.`)) return;
+  if (!account || account !== viewing) { say(`Connect the wallet that funded this bounty to ${act === "refund" ? "refund it" : "object"}.`, "err"); return; }
+
+  const question = act === "refund"
+    ? `Refund bounty #${id} (escrow ${b.dataset.v}) to ${short(account)}?\n\nIt expired with nobody paid. The whole amount comes back to this wallet.`
+    : `Object to the payment proposed for bounty #${id}?\n\nThe payment is cancelled and the bounty reopens. You get ONE objection per bounty: if the agent settles it again, that payment leaves at once, with no window.`;
+  if (!confirm(question)) return;
+
+  // La ventana se vuelve a mirar al firmar: si se cerró mientras la página
+  // estaba abierta, el contrato rechazaría la objeción y costaría gas.
+  if (act === "challenge" && Math.floor(Date.now() / 1000) >= Number(b.dataset.until || 0)) {
+    say("The challenge window closed while this page was open. The payment can no longer be stopped.", "err");
+    return;
+  }
 
   b.disabled = true;
   try {
     await ensureChain(window.ethereum);   // la red otra vez, justo antes de firmar
-    const data = encodeFunctionData({ abi: REFUND, functionName: "refund", args: [BigInt(b.dataset.refund)] });
+    const data = encodeFunctionData({ abi: WRITE, functionName: act, args: [BigInt(id)] });
     const txHash = await window.ethereum.request({ method: "eth_sendTransaction",
       params: [{ from: account, to: b.dataset.escrow, data }] });
     const w = say(`Sent. Waiting for GIWA… <a href="${EXPLORER}/tx/${txHash}" rel="noopener">${short(txHash, 10, 4)}</a>`);
@@ -567,8 +601,10 @@ document.addEventListener("click", async (e) => {
       if (!receipt) await new Promise((r) => setTimeout(r, 2000));
     }
     if (!receipt) { w.innerHTML += " · still pending, follow it on the explorer."; b.disabled = false; return; }
-    if (receipt.status !== "0x1") { say("The chain rejected the refund.", "err"); b.disabled = false; return; }
-    say(`Refunded. Bounty #${esc(b.dataset.refund)} is closed and the money is back in your wallet.`);
+    if (receipt.status !== "0x1") { say(`The chain rejected the ${act === "refund" ? "refund" : "objection"}.`, "err"); b.disabled = false; return; }
+    say(act === "refund"
+      ? `Refunded. Bounty #${esc(id)} is closed and the money is back in your wallet.`
+      : `Objection recorded. Bounty #${esc(id)} is open again and nothing was paid.`);
     setTimeout(() => view(account, false), 2500);
   } catch (err) {
     say(esc(err.shortMessage ?? err.message), "err");
