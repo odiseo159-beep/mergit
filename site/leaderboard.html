@@ -182,7 +182,7 @@ footer a:hover{color:var(--ink)}
 
   <section>
     <h2>Issues for <span class="r">Season 0.</span></h2>
-    <p class="sub">Small, real tasks in <a href="https://github.com/odiseo159-beep/mergit-demo" rel="noopener" style="border-bottom:1px dotted var(--dim)">mergit-demo</a>, with tests and CI. One bounty per issue: if it is already funded, pick another one.</p>
+    <p class="sub">Small, real tasks in <a href="https://github.com/odiseo159-beep/mergit-demo" rel="noopener" style="border-bottom:1px dotted var(--dim)">mergit-demo</a>, with tests and CI. One bounty per issue: if it is already funded, pick another one. The ones marked <b style="color:var(--ink)">left for outside funders</b> will not be funded by the Mergit team.</p>
     <div id="issues"><div class="empty">Reading the issues…</div></div>
   </section>
 
@@ -394,7 +394,12 @@ async function loadIssues(live) {
     else if (b.length === 1 && BigInt(b[0].amount || 0) < MIN_WEI) state = `<span class="tag warn"><i></i>Bounty #${esc(b[0].id)} is below 0.0005 ETH and does not score</span>`;
     else if (b.length === 1) state = `<span class="tag ok"><i></i>Funded · ${eth(b[0].amount)} ETH · bounty #${esc(b[0].id)}</span>`;
     else if (b.length > 1) state = `<span class="tag warn"><i></i>${b.length} bounties (${b.map((l) => "#" + esc(l.id)).join(", ")}) · name one with Bounty: #N</span>`;
-    else state = `<a class="btn" href="/post?uri=${encodeURIComponent(url)}&amount=0.0005">Fund it</a>`;
+    else {
+      // Los fund-me quedan para financiadores de afuera: el equipo no los financia.
+      const forYou = (x.labels || []).some((l) => l.name === "fund-me");
+      state = `<a class="btn" href="/post?uri=${encodeURIComponent(url)}&amount=0.0005">Fund it</a>`
+        + (forYou ? ` <span style="color:var(--dim)">· left for outside funders</span>` : "");
+    }
     return `<tr><td style="width:60px"><a href="${url}" rel="noopener">#${x.number}</a></td><td><b>${esc(x.title)}</b></td><td>${state}</td></tr>`;
   }).join("");
   $("issues").innerHTML = `<div class="wrap"><table><thead><tr><th>Issue</th><th>Task</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
