@@ -45,11 +45,15 @@ pragma solidity 0.8.24;
 ///         aunque el bounty tuviera ventana. Así la objeción sirve para corregir un
 ///         error, no para no pagar nunca.
 ///
-///         Lo que sigue sin resolver, y conviene decirlo: si el financiador objeta
-///         con el plazo casi vencido, puede pedir el reembolso antes de que el
-///         verificador vuelva a liquidar. Cerrar esa carrera pide un árbitro, que es
-///         justo la figura que Mergit intenta no tener. Por ahora la mitigación es
-///         que la objeción es única y que volver a liquidar es inmediato.
+///         Una carrera que la primera ronda de bounties dejó probada (#12): si el
+///         financiador objeta con el plazo casi vencido, el bounty reabierto no
+///         daba al verificador tiempo de volver a liquidar, y el reembolso quedaba
+///         a un paso. La objeción era un control sobre el verificador, no una vía
+///         para recuperar el dinero. `challenge` la cierra: cuando queda menos de
+///         una ventana antes del plazo, este se estira hasta una ventana completa
+///         (con el tope siguiéndolo) y el movimiento sale en `DeadlineExtended`.
+///         El dinero no queda encerrado: vencido el plazo nuevo sin liquidación,
+///         el reembolso sigue disponible.
 ///
 ///         Sigue sin owner, sin pausa y sin upgradabilidad. La comisión se fija en el
 ///         constructor, con el mismo techo del 5%.
@@ -281,6 +285,14 @@ contract MergitEscrowV3 {
     /// @notice El financiador objeta el pago propuesto. Solo una vez por bounty.
     /// @dev    El bounty vuelve a estar abierto y el verificador puede liquidar otra
     ///         vez; esa segunda liquidación ya no espera.
+    ///
+    ///         Si al objetar queda menos de una ventana de objeción antes del plazo
+    ///         (o ya pasó), el plazo se estira hasta `block.timestamp +
+    ///         challengeWindow`, y el tope lo sigue si queda por detrás. Sin esto,
+    ///         objetar con el plazo casi vencido dejaría el bounty abierto sin
+    ///         tiempo para la segunda liquidación y el reembolso a un paso: la
+    ///         objeción serviría para cobrar, no para corregir. El movimiento queda
+    ///         en `DeadlineExtended`.
     function challenge(uint256 bountyId) external {
         Bounty storage b = _bounties[bountyId];
 
@@ -296,6 +308,13 @@ contract MergitEscrowV3 {
         b.developer = address(0);
         b.claimableAt = 0;
         b.evidenceHash = bytes32(0);
+
+        if (uint64(block.timestamp) + b.challengeWindow > b.deadline) {
+            uint64 anterior = b.deadline;
+            b.deadline = uint64(block.timestamp) + b.challengeWindow;
+            if (b.deadline > b.maxDeadline) b.maxDeadline = b.deadline;
+            emit DeadlineExtended(bountyId, msg.sender, anterior, b.deadline);
+        }
 
         emit SettlementChallenged(bountyId, msg.sender, proposed);
     }

@@ -174,4 +174,63 @@ describe("MergitEscrowV3 · extender el plazo", async () => {
     assert.equal(Number(ev[0].args.previousDeadline), antes);
     assert.equal(Number(ev[0].args.newDeadline), antes + DIA);
   });
+
+  // ── la objeción con el plazo casi vencido ────────────────────
+
+  /** Publica, liquida y deja correr el reloj hasta pasado el plazo original,
+   *  con la ventana de objeción todavía abierta. Queda Pending y el plazo roto. */
+  const liquidaYPasaElPlazo = async (dias = 1, topeDias = 30, window = 7 * DIA) => {
+    await post(dias, topeDias, window);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await networkHelpers.time.increase(2 * DIA);
+  };
+
+  it("objetar con el plazo ya pasado no da el reembolso: el plazo se estira y el verificador vuelve a liquidar", async () => {
+    await liquidaYPasaElPlazo();
+    await escrow.write.challenge([1n]);
+    // el plazo nuevo: una ventana completa desde la objeción
+    assert.equal(await plazo(1n), (await ahora()) + 7 * DIA);
+    // el reembolso, que antes salía al instante, ahora revierte
+    await assert.rejects(escrow.write.refund([1n]), /TooEarly/);
+    // y la segunda liquidación ya no mira el reloj viejo
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    assert.equal((await escrow.read.getBounty([1n])).status, 3); // Settled
+  });
+
+  it("el estiro por objeción sale en DeadlineExtended, firmado por el financiador", async () => {
+    await liquidaYPasaElPlazo();
+    const antes = await plazo(1n);
+    await escrow.write.challenge([1n]);
+    const ev = await escrow.getEvents.DeadlineExtended();
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].args.by.toLowerCase(), funder.account.address.toLowerCase());
+    assert.equal(Number(ev[0].args.previousDeadline), antes);
+    assert.equal(Number(ev[0].args.newDeadline), (await ahora()) + 7 * DIA);
+  });
+
+  it("el tope sigue al plazo cuando la objeción lo empuja más allá", async () => {
+    await liquidaYPasaElPlazo(1, 5, 7 * DIA); // tope a 5 días, el estiro llega a ~9
+    await escrow.write.challenge([1n]);
+    assert.equal(await plazo(1n), (await ahora()) + 7 * DIA);
+    assert.equal(await tope(1n), (await ahora()) + 7 * DIA);
+  });
+
+  it("objetar con el plazo lejos no mueve nada", async () => {
+    await post(30, 40, 7 * DIA);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    const antes = await plazo(1n);
+    const topeAntes = await tope(1n);
+    await escrow.write.challenge([1n]); // quedan ~29 días: no toca el reloj
+    assert.equal(await plazo(1n), antes);
+    assert.equal(await tope(1n), topeAntes);
+    assert.equal((await escrow.getEvents.DeadlineExtended()).length, 0);
+  });
+
+  it("la objeción no encierra el dinero: vencido el plazo nuevo sin liquidación, el reembolso sale", async () => {
+    await liquidaYPasaElPlazo();
+    await escrow.write.challenge([1n]); // plazo nuevo: ahora + 7 días
+    await networkHelpers.time.increase(8 * DIA); // lo pasa sin liquidar
+    await escrow.write.refund([1n]);
+    assert.equal((await escrow.read.getBounty([1n])).status, 4); // Refunded
+  });
 });
