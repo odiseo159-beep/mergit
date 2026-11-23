@@ -460,7 +460,7 @@ footer .honest a:hover{color:var(--ink)}
   <div class="rise">
     <p class="kicker">03 · How it works</p>
     <h2>Judgement off-chain. <span class="r">Custody on-chain.</span></h2>
-    <p class="lede">The agent lives inside GitHub Actions and decides. The money never touches it: it waits in the contract until the two conditions hold.</p>
+    <p class="lede">The agent lives inside GitHub Actions and checks the merge and the CI. The money stays in the contract until the verifier releases it, or until the funder takes it back after the deadline.</p>
   </div>
 
   <!-- la tubería: un token rojo recorre las cuatro estaciones -->
@@ -526,7 +526,7 @@ footer .honest a:hover{color:var(--ink)}
   <div class="steps paper-steps rise">
     <div class="step">
       <h3>Lock</h3>
-      <p>A protocol posts a bounty and the reward is locked in the contract on GIWA. Nobody can move it, Mergit included.</p>
+      <p>A protocol posts a bounty and the reward is locked in the contract on GIWA. It stays there until the verifier releases it. If nobody is paid by the deadline, the funder takes it back.</p>
     </div>
     <div class="step">
       <h3>Build</h3>
