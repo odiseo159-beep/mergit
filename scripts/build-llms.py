@@ -49,7 +49,7 @@ Generated from README.md and AGENTS.md in that repository. Do not edit by hand.
 | Card for a README | https://www.mergit.xyz/card/<github-login>.svg |
 | Machine-readable API | https://www.mergit.xyz/openapi.json |
 | Source | https://github.com/odiseo159-beep/mergit |
-| Reusable GitHub Action | odiseo159-beep/mergit@v1.5 |
+| Reusable GitHub Action | odiseo159-beep/mergit@v1.6 |
 
 ## Chain
 
