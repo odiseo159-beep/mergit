@@ -252,4 +252,52 @@ describe("MergitEscrowV3 · extender el plazo", async () => {
 
     assert.equal((await escrow.read.getBounty([1n])).status, 4); // Refunded
   });
+
+  // ── el mínimo de 24 horas para volver a liquidar ─────────────
+
+  /** Liquida a `antes` segundos del plazo y objeta ya vencido, dentro de la ventana. */
+  const objetarVencido = async (antes) => {
+    const deadline = await plazo(1n);
+    await networkHelpers.time.increase(deadline - (await ahora()) - antes);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await networkHelpers.time.increase(antes + 1);
+    assert.ok((await ahora()) > deadline);
+    await escrow.write.challenge([1n]);
+    return ahora();
+  };
+
+  it("con una ventana de segundos, el verificador conserva 24 horas para volver a liquidar", async () => {
+    await post(1, 1, 60);
+    const objetado = await objetarVencido(30);
+    assert.equal(await plazo(1n), objetado + DIA);
+    assert.equal(await tope(1n), objetado + DIA);
+
+    await networkHelpers.time.increase(DIA - 3600);
+    await assert.rejects(escrow.write.refund([1n]), /TooEarly/);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    assert.equal((await escrow.read.getBounty([1n])).status, 3); // Settled
+  });
+
+  it("con una ventana de segundos, pasadas las 24 horas el financiador sí se reembolsa", async () => {
+    await post(1, 1, 60);
+    const objetado = await objetarVencido(30);
+    await networkHelpers.time.increase(objetado + DIA - (await ahora()) + 1);
+    await escrow.write.refund([1n]);
+    assert.equal((await escrow.read.getBounty([1n])).status, 4); // Refunded
+  });
+
+  it("con una ventana mayor a 24 horas, el margen es la ventana", async () => {
+    await post(3, 3, 2 * DIA);
+    const objetado = await objetarVencido(DIA);
+    assert.equal(await plazo(1n), objetado + 2 * DIA);
+  });
+
+  it("si al plazo le quedan más de 24 horas, la objeción no lo mueve aunque la ventana sea corta", async () => {
+    await post(2, 2, 60);
+    const antes = await plazo(1n);
+    await escrow.write.settle([1n, developer.account.address, EVIDENCE], { account: verifier.account });
+    await escrow.write.challenge([1n]);
+    assert.equal(await plazo(1n), antes);
+    assert.equal((await escrow.getEvents.DeadlineExtended()).length, 0);
+  });
 });

@@ -45,12 +45,12 @@ pragma solidity 0.8.24;
 ///         aunque el bounty tuviera ventana. Así la objeción sirve para corregir un
 ///         error, no para no pagar nunca.
 ///
-///         La objeción ya no sirve para quedarse con el dinero: si el financiador
-///         objeta cuando al plazo le queda menos de una ventana de objeción, el
-///         plazo se mueve a `block.timestamp + challengeWindow` y el verificador
-///         tiene otra ventana para volver a liquidar. El tope se sube con él si
-///         hiciera falta. Así la objeción sigue siendo un control, no una vía de
-///         reembolso anticipado.
+///         La objeción ya no sirve para quedarse con el dinero: tras objetar, el
+///         verificador tiene al menos `MIN_RESETTLE_WINDOW` (24 horas), o la ventana
+///         del bounty si es más larga, para volver a liquidar. Si al plazo le queda
+///         menos que eso, se mueve hacia adelante y el tope sube con él. Sin ese
+///         mínimo, un financiador podría elegir una ventana de segundos y reembolsarse
+///         antes de que el agente alcanzara a reaccionar.
 ///
 ///         Sigue sin owner, sin pausa y sin upgradabilidad. La comisión se fija en el
 ///         constructor, con el mismo techo del 5%.
@@ -84,6 +84,7 @@ contract MergitEscrowV3 {
     uint16 public constant MAX_FEE_BPS = 500; // techo duro: 5%
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint32 public constant MAX_CHALLENGE_WINDOW = 7 days;
+    uint32 public constant MIN_RESETTLE_WINDOW = 1 days; // margen mínimo para liquidar tras una objeción
 
     // ─────────────────────────────── Estado ──────────────────────────────
 
@@ -281,10 +282,10 @@ contract MergitEscrowV3 {
 
     /// @notice El financiador objeta el pago propuesto. Solo una vez por bounty.
     /// @dev    El bounty vuelve a estar abierto y el verificador puede liquidar otra
-    ///         vez; esa segunda liquidación ya no espera. Si al plazo le queda menos
-    ///         de una ventana de objeción, se mueve hacia adelante para que el
-    ///         verificador tenga tiempo de reaccionar. El tope sube con él si el
-    ///         nuevo plazo lo deja atrás.
+    ///         vez; esa segunda liquidación ya no espera. El verificador conserva como
+    ///         mínimo `MIN_RESETTLE_WINDOW`, o la ventana del bounty si es mayor: si al
+    ///         plazo le queda menos, se mueve hacia adelante. El tope sube con él si
+    ///         el nuevo plazo lo deja atrás.
     function challenge(uint256 bountyId) external {
         Bounty storage b = _bounties[bountyId];
 
@@ -301,14 +302,15 @@ contract MergitEscrowV3 {
         b.claimableAt = 0;
         b.evidenceHash = bytes32(0);
 
-        // Si la objeción llega con el plazo encima, el verificador necesita otra
-        // ventana para volver a liquidar. El plazo solo se mueve hacia adelante.
-        uint64 previousDeadline = b.deadline;
-        if (uint256(b.deadline) < block.timestamp + b.challengeWindow) {
-            uint64 newDeadline = uint64(block.timestamp) + b.challengeWindow;
-            b.deadline = newDeadline;
-            if (newDeadline > b.maxDeadline) b.maxDeadline = newDeadline;
-            emit DeadlineExtended(bountyId, msg.sender, previousDeadline, newDeadline);
+        // Si la objeción llega con el plazo encima, el verificador necesita tiempo
+        // real para volver a liquidar. El plazo solo se mueve hacia adelante.
+        uint32 margen = b.challengeWindow > MIN_RESETTLE_WINDOW ? b.challengeWindow : MIN_RESETTLE_WINDOW;
+        uint64 nuevoPlazo = uint64(block.timestamp) + margen;
+        if (b.deadline < nuevoPlazo) {
+            uint64 anterior = b.deadline;
+            b.deadline = nuevoPlazo;
+            if (nuevoPlazo > b.maxDeadline) b.maxDeadline = nuevoPlazo;
+            emit DeadlineExtended(bountyId, msg.sender, anterior, nuevoPlazo);
         }
 
         emit SettlementChallenged(bountyId, msg.sender, proposed);

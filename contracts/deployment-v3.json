@@ -1,0 +1,15 @@
+{
+  "network": "giwa-sepolia",
+  "chainId": 91342,
+  "contract": "MergitEscrowV3",
+  "address": "0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0",
+  "deployer": "0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b",
+  "constructorArgs": [
+    150,
+    "0x23E8541dA96158d342477D694274E27639807686"
+  ],
+  "txHash": "0x1131cb10ac50a0606b5c82c22b39df7ac22aa56c5f8affa9593503bae01e0b7b",
+  "blockNumber": 42066532,
+  "explorer": "https://sepolia-explorer.giwa.io/address/0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0",
+  "deployedAt": "2026-11-23T05:27:27.749Z"
+}
