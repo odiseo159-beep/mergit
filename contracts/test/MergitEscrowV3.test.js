@@ -10,7 +10,7 @@ const AMOUNT = parseEther("0.01");
 const EVIDENCE = keccak256(toHex("mergit-demo#2"));
 const DIA = 86_400;
 
-describe("MergitEscrowV3 · extender el plazo", async () => {
+for (const NOMBRE of ["MergitEscrowV3", "MergitEscrowV4"]) describe(`${NOMBRE} · extender el plazo`, async () => {
   const { viem, networkHelpers } = await network.connect();
 
   let escrow, funder, verifier, developer, stranger, feeRecipient, publicClient;
@@ -32,7 +32,7 @@ describe("MergitEscrowV3 · extender el plazo", async () => {
   beforeEach(async () => {
     [funder, verifier, developer, stranger, feeRecipient] = await viem.getWalletClients();
     publicClient = await viem.getPublicClient();
-    escrow = await viem.deployContract("MergitEscrowV3", [Number(FEE_BPS), feeRecipient.account.address]);
+    escrow = await viem.deployContract(NOMBRE, [Number(FEE_BPS), feeRecipient.account.address]);
   });
 
   // ── lo que sí ────────────────────────────────────────────────
