@@ -86,7 +86,9 @@ section{padding:clamp(70px,10vh,130px) var(--pad);position:relative}
 .btn.primary:hover{background:#ff4a4a;border-color:#ff4a4a}
 
 /* ── hero ───────────────────────────────────── */
-.hero{height:100svh;min-height:640px;padding:0;overflow:hidden;isolation:isolate;display:grid;place-items:center}
+/* position:relative: sin él, la textura y el video del hero se medían contra la página y no contra el hero,
+   su overflow:hidden no los recortaba, y en el celular la página entera se armaba a ~570 px de ancho. */
+.hero{position:relative;height:100svh;min-height:640px;padding:0;overflow:hidden;isolation:isolate;display:grid;place-items:center}
 .hero video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-3;opacity:0;transform:scale(1.08);
   animation:video-in 3.4s cubic-bezier(.2,.7,.1,1) .2s forwards}
 @keyframes video-in{to{opacity:.72;transform:scale(1)}}
@@ -329,8 +331,89 @@ footer .honest b{color:var(--mute);font-weight:500}
 footer .honest a{color:var(--mute);border-bottom:1px solid var(--line)}
 footer .honest a:hover{color:var(--ink)}
 
+/* ── scroll suave (Lenis, en media/lenis.mjs) ───── */
+html.lenis,html.lenis body{height:auto}
+html.lenis{scroll-behavior:auto}
+.lenis.lenis-stopped{overflow:clip}
+section[id],header[id]{scroll-margin-top:64px}
+
+/* ── pantalla de carga ─────────────────────────────
+   Solo existe con JavaScript: la clase `loading` la pone el script del <head>.
+   Mientras está, el hero queda en pausa, así su entrada empieza al irse la pantalla. */
+.loader{display:none}
+html.loading .loader,.loader.leaving{display:grid}
+html.loading{overflow:hidden}
+html.loading .hero,html.loading .hero *{animation-play-state:paused!important}
+.loader{position:fixed;inset:0;z-index:100;place-items:center;background:var(--bg);
+  transition:opacity .75s cubic-bezier(.65,0,.35,1),transform .75s cubic-bezier(.65,0,.35,1)}
+.loader::after{content:"";position:absolute;left:50%;top:50%;width:520px;height:520px;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,45,45,.14),rgba(255,45,45,0));pointer-events:none}
+.loader.out{opacity:0}
+.loader.out .ld{transform:scale(.92);opacity:0}
+.ld{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:26px;
+  transition:transform .75s cubic-bezier(.65,0,.35,1),opacity .5s ease}
+.ldmark{width:92px;height:92px;overflow:visible}
+.ldmark .b{fill:none;stroke:var(--ink);stroke-width:12;stroke-linecap:square;stroke-linejoin:round;stroke-dasharray:200;stroke-dashoffset:200;
+  animation:draw .9s cubic-bezier(.6,0,.2,1) .15s forwards}
+.ldmark .s{stroke:var(--red);stroke-width:12;stroke-dasharray:40;stroke-dashoffset:40;animation:draw .45s cubic-bezier(.6,0,.2,1) 1.05s forwards}
+.ldmark .n{fill:var(--ink);transform-box:fill-box;transform-origin:center;transform:scale(0);animation:pop .45s cubic-bezier(.3,1.6,.5,1) forwards}
+.ldmark .n1{animation-delay:.1s}.ldmark .n2{animation-delay:.25s}
+.ldmark .m{fill:var(--red);transform-box:fill-box;transform-origin:center;transform:scale(0);
+  animation:pop .5s cubic-bezier(.3,1.7,.5,1) .8s forwards,glow 1.8s ease-in-out 1.3s infinite}
+.ldbar{width:148px;height:2px;background:var(--line);border-radius:2px;overflow:hidden}
+.ldbar i{display:block;height:100%;width:100%;background:var(--red);transform-origin:left;transform:scaleX(0);
+  animation:ldfill 1.6s cubic-bezier(.3,0,.2,1) .2s forwards}
+.loader.done .ldbar i{animation:none;transform:scaleX(1);transition:transform .3s ease}
+@keyframes ldfill{to{transform:scaleX(.82)}}
+.ldtxt{font-family:var(--mono);font-size:11px;letter-spacing:.32em;color:var(--mute);opacity:0;animation:fade .6s ease .5s forwards}
+.ldtxt b{color:var(--red);font-weight:500}
+
+/* ── aviso de Season 0 ───────────────────────────── */
+.s0{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px}
+.s0[hidden]{display:none}
+.s0-back{position:absolute;inset:0;background:rgba(5,5,6,.66);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;transition:opacity .45s ease}
+.s0-card{position:relative;width:min(460px,100%);background:#111114;border:1px solid var(--line);border-radius:16px;
+  padding:34px 32px 26px;box-shadow:0 40px 120px -20px rgba(0,0,0,.9),0 0 0 1px rgba(255,45,45,.06);overflow:hidden;
+  opacity:0;transform:translateY(22px) scale(.97);transition:opacity .5s cubic-bezier(.2,.8,.2,1),transform .6s cubic-bezier(.2,.8,.2,1)}
+.s0-card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--red)}
+.s0-card::after{content:"";position:absolute;right:-120px;top:-140px;width:320px;height:320px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,45,45,.16),rgba(255,45,45,0));pointer-events:none}
+.s0.show .s0-back{opacity:1}
+.s0.show .s0-card{opacity:1;transform:none}
+.s0-x{position:absolute;top:12px;right:12px;z-index:1;width:36px;height:36px;border:0;border-radius:8px;background:transparent;
+  color:var(--mute);font-size:22px;line-height:1;cursor:pointer;transition:color .2s,background .2s}
+.s0-x:hover{color:var(--ink);background:rgba(255,255,255,.06)}
+.s0-k{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)}
+.s0-k i{width:8px;height:8px;border-radius:50%;background:var(--red);animation:ping 1.8s infinite}
+.s0 h3{position:relative;margin-top:16px;font-size:clamp(32px,7vw,42px);line-height:.98;font-weight:900;letter-spacing:-.045em}
+.s0 h3 .r{color:var(--red)}
+.s0-p{position:relative;margin-top:14px;color:#b4b4bc;font-size:15px;line-height:1.55}
+.s0-left{position:relative;margin-top:20px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 16px;
+  border:1px solid var(--line);border-radius:10px;background:#0d0d10}
+.s0-left b{font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.s0-left span{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.s0-btns{position:relative;margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.s0-btns .btn{text-align:center;padding:15px 12px}
+.s0-f{position:relative;margin-top:14px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--dim);text-align:center}
+@media (max-width:420px){.s0-btns{grid-template-columns:1fr}.s0-card{padding:30px 22px 22px}}
+
+/* el enlace al leaderboard en la barra, con su punto en vivo */
+.nav ul a.live{color:var(--ink);display:inline-flex;align-items:center;gap:8px}
+.nav ul a.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--red);animation:ping 1.8s infinite}
+.nav.onpaper ul a.live{color:#0a0a0b}
+.nav ul a{white-space:nowrap}
+/* Con el enlace al leaderboard, la barra no entra entre 900 y 1180 px: se quedan los que llevan a la demo */
+@media (max-width:1180px){.nav ul li:nth-child(1),.nav ul li:nth-child(4){display:none}}
+
 @media (max-width:900px){
-  .rungrid,.roadgrid{grid-template-columns:1fr}
+  /* minmax(0,1fr) y no 1fr: con 1fr, una línea larga de la terminal ensanchaba la página
+     entera en el celular (se armaba a ~585 px en una pantalla de 375). */
+  .rungrid,.roadgrid{grid-template-columns:minmax(0,1fr)}
+  .rungrid>*,.roadgrid>*,.term{min-width:0}
+  .log .ln{grid-template-columns:58px minmax(0,1fr)}
+  .log .ln>*{overflow-wrap:anywhere}
+  .facts{grid-template-columns:repeat(3,minmax(0,1fr))}
   .roadgraph{min-height:420px}
   .nav ul{display:none}
   .prec div{grid-template-columns:1fr;gap:6px}
@@ -341,8 +424,45 @@ footer .honest a:hover{color:var(--ink)}
   *,*::before,*::after{animation-duration:.01s!important;animation-delay:0s!important;transition-duration:.01s!important}
 }
 </style>
+<script>
+// Antes del primer pintado: activa la pantalla de carga. Sin JavaScript no hay pantalla,
+// y la página se ve como siempre.
+document.documentElement.classList.add("loading");
+</script>
 </head>
 <body>
+
+<!-- ── pantalla de carga ─────────────────────────────────── -->
+<div class="loader" id="loader" aria-hidden="true">
+  <div class="ld">
+    <svg class="ldmark" viewBox="0 0 100 100">
+      <path class="b" d="M18 72 V24 L50 56 L82 24 V72"/>
+      <line class="s" x1="50" y1="56" x2="50" y2="92"/>
+      <circle class="n n1" cx="18" cy="24" r="8.5"/>
+      <circle class="n n2" cx="82" cy="24" r="8.5"/>
+      <circle class="m" cx="50" cy="56" r="12"/>
+    </svg>
+    <div class="ldbar"><i></i></div>
+    <p class="ldtxt"><b>MERGE IT.</b> GET PAID.</p>
+  </div>
+</div>
+
+<!-- ── aviso de Season 0 (se muestra hasta el 28-nov 23:59 UTC) ── -->
+<div class="s0" id="s0" role="dialog" aria-modal="true" aria-labelledby="s0-t" hidden>
+  <div class="s0-back" data-close></div>
+  <div class="s0-card">
+    <button class="s0-x" type="button" data-close aria-label="Close">×</button>
+    <p class="s0-k"><i></i>Season 0 · live</p>
+    <h3 id="s0-t">The leaderboard<br>is <span class="r">open.</span></h3>
+    <p class="s0-p">Fund a bounty, or ship the code that gets one paid. Every point is read straight from GIWA Chain, and nobody can edit the table, us included.</p>
+    <div class="s0-left"><b id="s0-cd">–</b><span>left · ends Nov 28, 23:59 UTC</span></div>
+    <div class="s0-btns">
+      <a class="btn primary" href="/leaderboard#join">Join Season 0</a>
+      <a class="btn" href="/leaderboard">See the board</a>
+    </div>
+    <p class="s0-f">Testnet ETH. Nothing to buy.</p>
+  </div>
+</div>
 
 <nav class="nav" id="nav">
   <a class="brand" href="#top">
@@ -355,7 +475,7 @@ footer .honest a:hover{color:var(--ink)}
     <li><a href="#how">How it works</a></li>
     <li><a href="#giwa">Why GIWA</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
-    
+    <li><a href="/leaderboard" class="live">Leaderboard</a></li>
   </ul>
   <span class="navcta"><a class="cta" href="/start">Start merging</a><a class="ghost" href="/docs">Tech docs</a></span>
 </nav>
@@ -703,6 +823,114 @@ footer .honest a:hover{color:var(--ink)}
   </p>
 </footer>
 
+<script>
+/* ── pantalla de carga ───────────────────────────────
+   Se va cuando cargaron las fuentes y el video del hero puede arrancar, con un mínimo
+   para que el logo termine de dibujarse y un máximo para no retener a nadie.
+   Va en un script clásico y aparte: el módulo de abajo espera a la cadena, y la
+   pantalla no debe depender de eso. */
+(() => {
+  const html = document.documentElement, loader = document.getElementById("loader");
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let visto = false;
+  try { visto = sessionStorage.getItem("mergit-loaded") === "1"; } catch {}
+  const calma = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const MIN = calma ? 250 : visto ? 700 : 1700, MAX = 4500, t0 = performance.now();
+
+  const video = new Promise((r) => {
+    const v = document.querySelector(".hero video");
+    if (!v || v.readyState >= 3) return r();
+    v.addEventListener("canplay", r, { once: true });
+    v.addEventListener("error", r, { once: true });
+  });
+  const listo = Promise.all([document.fonts ? document.fonts.ready : null, video]);
+
+  let hecho = false;
+  const terminar = async () => {
+    if (hecho) return;
+    hecho = true;
+    loader.classList.add("done");
+    await wait(calma ? 0 : 280);
+    loader.classList.add("leaving");
+    html.classList.remove("loading");
+    requestAnimationFrame(() => loader.classList.add("out"));
+    try { sessionStorage.setItem("mergit-loaded", "1"); } catch {}
+    dispatchEvent(new Event("mergit:ready"));
+    await wait(800);
+    loader.remove();
+  };
+  Promise.race([listo, wait(MAX)])
+    .then(() => wait(Math.max(0, MIN - (performance.now() - t0))))
+    .then(terminar, terminar);
+  // Red de seguridad: pase lo que pase, a los 6 s la página queda libre.
+  setTimeout(terminar, 6000);
+})();
+
+/* ── aviso de Season 0 ───────────────────────────────
+   Una vez por sesión y solo mientras dure la temporada. */
+(() => {
+  const FIN = Date.parse("2026-11-28T23:59:59Z");
+  const box = document.getElementById("s0"), cd = document.getElementById("s0-cd");
+  if (!box || Date.now() > FIN) return box && box.remove();
+  let cerrado = false;
+  try { cerrado = sessionStorage.getItem("mergit-s0") === "1"; } catch {}
+  if (cerrado) return box.remove();
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const pintar = () => {
+    const s = Math.max(0, Math.floor((FIN - Date.now()) / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
+    cd.textContent = d > 0 ? `${d}d ${pad(h)}h ${pad(m)}m` : `${pad(h)}h ${pad(m)}m ${pad(s % 60)}s`;
+  };
+  let reloj, antes;
+
+  const cerrar = () => {
+    try { sessionStorage.setItem("mergit-s0", "1"); } catch {}
+    box.classList.remove("show");
+    clearInterval(reloj);
+    window.__lenis?.start();
+    removeEventListener("keydown", teclas);
+    setTimeout(() => { box.hidden = true; antes?.focus?.(); }, 450);
+  };
+  const teclas = (e) => {
+    if (e.key === "Escape") return cerrar();
+    if (e.key !== "Tab") return;
+    // El foco no se escapa del aviso mientras está abierto.
+    const f = [...box.querySelectorAll("a,button")];
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  };
+  const abrir = () => {
+    if (Date.now() > FIN) return;
+    antes = document.activeElement;
+    pintar();
+    reloj = setInterval(pintar, 1000);
+    box.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add("show")));
+    window.__lenis?.stop();
+    addEventListener("keydown", teclas);
+    box.querySelector(".btn.primary").focus({ preventScroll: true });
+  };
+  box.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", cerrar));
+  // Que el logo del hero se dibuje antes de tapar nada.
+  addEventListener("mergit:ready", () => setTimeout(abrir, 1600), { once: true });
+})();
+</script>
+
+<script type="module">
+/* ── scroll suave ─────────────────────────────────────
+   Lenis suaviza la rueda del mouse y los enlaces internos. En pantallas táctiles deja
+   el scroll nativo, y con "reducir movimiento" no hace nada. */
+import Lenis from "./media/lenis.mjs";
+const lenis = new Lenis({ autoRaf: true, lerp: .085, anchors: { offset: -64 } });
+window.__lenis = lenis;
+if (document.documentElement.classList.contains("loading")) {
+  lenis.stop();
+  addEventListener("mergit:ready", () => { if (document.getElementById("s0")?.classList.contains("show") !== true) lenis.start(); }, { once: true });
+}
+</script>
+
 <script type="module">
 import { loadActivity, PULLS, EXPLORER, ESCROW, eth, short } from "./media/live.js";
 
@@ -716,7 +944,9 @@ const reveal = () => document.querySelectorAll(".rise:not(.in)").forEach((el) =>
   const r = el.getBoundingClientRect();
   if (r.top < innerHeight * .92 && r.bottom > 0) el.classList.add("in");
 });
-addEventListener("scroll", reveal, { passive: true });
+// Un cálculo por cuadro como mucho: medir en cada evento de scroll traba la página.
+const porCuadro = (fn) => { let t = 0; return () => { if (!t) t = requestAnimationFrame(() => { t = 0; fn(); }); }; };
+addEventListener("scroll", porCuadro(reveal), { passive: true });
 addEventListener("resize", reveal);
 setInterval(() => { reveal(); onScroll(); }, 1200);
 
@@ -729,7 +959,7 @@ const onScroll = () => {
   nav.classList.toggle("stuck", scrollY > 40);
   nav.classList.toggle("onpaper", papers.some((p) => { const r = p.getBoundingClientRect(); return r.top < 60 && r.bottom > 60; }));
 };
-addEventListener("scroll", onScroll, { passive: true });
+addEventListener("scroll", porCuadro(onScroll), { passive: true });
 onScroll();
 
 /* ── datos reales de la cadena ───────────────────────── */
@@ -832,7 +1062,7 @@ const maybePlay = () => {
   if (r.top < innerHeight * .8 && r.bottom > innerHeight * .2) { started = true; play(); }
 };
 new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting && !started) { started = true; play(); } }), { threshold: .35 }).observe(term);
-addEventListener("scroll", maybePlay, { passive: true });
+addEventListener("scroll", porCuadro(maybePlay), { passive: true });
 const watch = setInterval(() => { maybePlay(); if (started) clearInterval(watch); }, 1200);
 </script>
 </body>
