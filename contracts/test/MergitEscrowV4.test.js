@@ -268,4 +268,29 @@ describe("MergitEscrowV4 · un pago no se atasca", async () => {
 
     assert.equal(await saldo(escrow.address), await escrow.read.owed([receptor.address]));
   });
+
+  // ── el contrato de la prueba en vivo (RechazaEther) ───────────
+
+  it("RechazaEther: el pago se acredita y solo su dueño lo retira", async () => {
+    const rechaza = await viem.deployContract("RechazaEther", [escrow.address], { client: { wallet: developer } });
+    await post();
+    await proponer(rechaza.address);
+    await pasarVentana();
+    await escrow.write.finalize([1n], { account: stranger.account });
+
+    assert.equal(await escrow.read.owed([rechaza.address]), PAYOUT);
+    await assert.rejects(
+      rechaza.write.retirar([stranger.account.address], { account: stranger.account }),
+      /NoEresElDueno/,
+    );
+
+    const antes = await saldo(developer.account.address);
+    await rechaza.write.retirar([funder.account.address], { account: developer.account });
+    assert.equal(await escrow.read.owed([rechaza.address]), 0n);
+    assert.equal(await saldo(escrow.address), 0n);
+    assert.ok((await saldo(developer.account.address)) < antes, "el dueño pagó el gas del retiro");
+    const ev = await escrow.getEvents.PaymentWithdrawn();
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].args.amount, PAYOUT);
+  });
 });
