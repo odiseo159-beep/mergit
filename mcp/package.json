@@ -1,0 +1,49 @@
+{
+  "name": "mergit-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Mergit: lets Claude, Codex or any MCP client read GitHub bounties on GIWA and prepare signing links. Never holds a key.",
+  "type": "module",
+  "bin": {
+    "mergit-mcp": "dist/mergit-mcp.mjs"
+  },
+  "files": [
+    "dist/mergit-mcp.mjs",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "start": "node server.mjs",
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node test/protocolo.mjs",
+    "prepublishOnly": "npm test && npm run build && node test/protocolo.mjs dist"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "giwa",
+    "bounties",
+    "github",
+    "escrow",
+    "claude",
+    "codex"
+  ],
+  "homepage": "https://www.mergit.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/odiseo159-beep/mergit.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/odiseo159-beep/mergit/issues"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "^3.25.76",
+    "esbuild": "0.28.2"
+  }
+}

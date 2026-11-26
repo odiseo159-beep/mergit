@@ -1,0 +1,45 @@
+# Las pruebas del servidor MCP (mcp/), sobre cada pull request que lo toca.
+# Incluye la regla de que el servidor no puede tocar una clave ni firmar:
+# test/sin-claves.test.mjs.
+#
+# ⚠️ Solo `mcp/**`, a propósito. El agente cuenta todos los checks del commit como
+# CI y los mete en la evidencia: si esto corriera también sobre `agent/**`, un
+# fallo aquí podría dejar sin cobrar a quien manda trabajo al agente. Ampliarlo
+# a `agent/**` (el MCP importa de ahí) solo después de Season 0 y con el OK de
+# Daniel.
+#
+# `npm test` y no `node --test` a secas: sin argumentos, Node también correría
+# test/protocolo.mjs, que sale a la red (GIWA y GitHub) y no es una prueba de CI.
+name: MCP tests
+
+on:
+  pull_request:
+    paths:
+      - "mcp/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp:
+    name: MCP tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: |
+          npm ci --prefix agent
+          npm ci --prefix mcp
+
+      - name: Test
+        working-directory: mcp
+        run: npm test

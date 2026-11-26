@@ -48,6 +48,7 @@ Generated from README.md and AGENTS.md in that repository. Do not edit by hand.
 | Badge for a README | https://www.mergit.xyz/badge/<github-login>.svg |
 | Card for a README | https://www.mergit.xyz/card/<github-login>.svg |
 | Machine-readable API | https://www.mergit.xyz/openapi.json |
+| MCP server (tools for Claude, Codex, Cursor) | `npx -y mergit-mcp` (npm: mergit-mcp); setup under "The shortcut" below |
 | Source | https://github.com/odiseo159-beep/mergit |
 | Reusable GitHub Action | odiseo159-beep/mergit@v1.6 |
 
@@ -76,10 +77,14 @@ def direcciones():
          "the one with the payment history, and the default"),
         ("Escrow v2", "0x48d506080abdbed11f1acbe40f799301d9612ad5",
          "adds an opt-in challenge window per bounty; zero seconds behaves like v1"),
+        ("Escrow v3", "0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0",
+         "extendable deadline and a minimum time to re-settle after a challenge; internal tests only"),
+        ("Escrow v4", "0x9968834566b8be8fb023e7c81e95597d713edf2b",
+         "credits a payment it cannot deliver instead of locking it; internal tests only"),
         ("Identity registry", registro.lower(),
          "one wallet, one GitHub login, one public proof"),
     ]
-    out = ["## Contracts", "", "All three deployed and verified on GIWA Sepolia.", "",
+    out = ["## Contracts", "", "All deployed and verified on GIWA Sepolia. Bounty numbers repeat between escrows.", "",
            "| | Address | |", "|---|---|---|"]
     for nombre, addr, nota in filas:
         out.append("| %s | `%s` | %s |" % (nombre, addr, nota))
