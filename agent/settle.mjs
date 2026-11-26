@@ -29,6 +29,7 @@ import {
   args,
 } from "./chain.mjs";
 import { verifyPullRequest } from "./verify.mjs";
+import { creditedToDeveloper } from "./receipt.mjs";
 
 /** La clave del agente: variable de entorno en CI, archivo local en la laptop. */
 function agentKey() {
@@ -179,20 +180,32 @@ async function finalizeBounty({ bountyId, contract, bounty, result, send }) {
     return { ...result, stage: "reverted", ok: false, tx: hash, url: `${EXPLORER}/tx/${hash}`, reason: `the finalize transaction ${hash} reverted on chain` };
   }
   let event = null;
+  const credits = [];
   for (const log of receipt.logs) {
     try {
       const e = decodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics });
       if (e.eventName === "BountySettled") event = e.args;
+      if (e.eventName === "PaymentCredited") credits.push(e);
     } catch {
       // un log ajeno en el mismo recibo
     }
   }
+  // Un `finalize` puede entregar el ETH o dejarlo en `owed`. Lo dice el recibo:
+  // si hay PaymentCredited al desarrollador por el payout exacto, el pago fue
+  // aprobado pero todavía no se cobró. La comisión acreditada a otra dirección
+  // no cuenta (ver creditedToDeveloper).
+  const credited = creditedToDeveloper(credits, {
+    bountyId,
+    developer: bounty.developer,
+    payout: result.payout,
+  });
   return {
     ...result,
     stage: "paid",
     ok: true,
     finalized: true,
     developer: bounty.developer,
+    credited,
     tx: hash,
     block: receipt.blockNumber,
     gasUsed: receipt.gasUsed,
@@ -270,7 +283,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
 
   console.log(`4. ${r.finalized ? "finalizado" : "liquidado"} en el bloque ${r.block} (gas ${r.gasUsed})\n`);
-  console.log(`   pagado al desarrollador: ${formatEther(r.event.paidToDeveloper)} ETH`);
+  // Un pago acreditado no está pagado: el ETH sigue en el escrow. No decir
+  // "pagado" aquí ni en el recibo; el desarrollador lo saca con withdrawTo.
+  if (r.credited > 0n) {
+    console.log(`   acreditado al desarrollador: ${formatEther(r.credited)} ETH (sigue en el escrow)`);
+  } else {
+    console.log(`   pagado al desarrollador: ${formatEther(r.event.paidToDeveloper)} ETH`);
+  }
   console.log(`   comisión de protocolo  : ${formatEther(r.event.protocolFee)} ETH`);
   console.log(`   evidencia on-chain     : ${r.event.evidenceHash}`);
   if (!r.finalized) console.log(`   coincide con el paso 1 : ${r.hashMatches ? "sí" : "NO"}`);

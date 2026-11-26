@@ -20,6 +20,8 @@
 // la ambigüedad y no paga nadie**. Quien lo llama puede estrechar con una lista
 // de financiadores aceptados (`funders` en `mergit.json`). Lo que no existe es
 // "quedarse con el primero".
+import { creditedToDeveloper } from "./receipt.mjs";
+
 const EXPLORER = "https://sepolia-explorer.giwa.io";
 
 /** Los dos escrows desplegados. `from` deja fuera los bounties de prueba. */
@@ -112,13 +114,27 @@ export async function listBounties({ address: solo } = {}) {
  * y en qué transacción. Sirve para reponer un recibo que no llegó a escribirse.
  */
 export async function settlementOf(address, bountyId) {
-  for (const e of await logsOf(address)) {
+  const logs = await logsOf(address);
+  for (const e of logs) {
     if (e.kind !== "BountySettled" || String(e.bountyId) !== String(bountyId)) continue;
+    // Un finalize puede dejar el payout en `owed` (PaymentCredited) en vez de
+    // entregarlo. Cualquiera pudo llamar a finalize, así que esto se lee de los
+    // logs del explorador, no de una transacción que envió este agente.
+    const developer = String(e.developer).toLowerCase();
+    const credits = logs
+      .filter((c) => c.kind === "PaymentCredited" && String(c.bountyId) === String(bountyId))
+      .map((c) => ({ eventName: "PaymentCredited", args: { bountyId: c.bountyId, to: c.to, amount: c.amount } }));
+    const credited = creditedToDeveloper(credits, {
+      bountyId,
+      developer,
+      payout: e.paidToDeveloper,
+    });
     return {
-      developer: String(e.developer).toLowerCase(),
+      developer,
       paidToDeveloper: BigInt(e.paidToDeveloper),
       protocolFee: BigInt(e.protocolFee),
       evidenceHash: String(e.evidenceHash).toLowerCase(),
+      credited,
       tx: e.tx,
     };
   }
