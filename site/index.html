@@ -932,7 +932,7 @@ if (document.documentElement.classList.contains("loading")) {
 </script>
 
 <script type="module">
-import { loadActivity, PULLS, EXPLORER, ESCROW, eth, short } from "./media/live.js";
+import { loadActivity, settlementFor, PULLS, EXPLORER, ESCROW, eth, short } from "./media/live.js";
 
 /* ── revelados al hacer scroll ───────────────────────── */
 const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add("in")), { threshold: .18, rootMargin: "0px 0px -8% 0px" });
@@ -963,7 +963,7 @@ addEventListener("scroll", porCuadro(onScroll), { passive: true });
 onScroll();
 
 /* ── datos reales de la cadena ───────────────────────── */
-const { settled, live } = await loadActivity();
+const { settled, live, snapshotIds } = await loadActivity();
 const hhmmss = (t) => new Date(t).toISOString().slice(11, 19);
 document.getElementById("dot").classList.toggle("on", live);
 document.getElementById("dotlbl").textContent = live ? "Live · GIWA Sepolia" : "GIWA Sepolia";
@@ -989,12 +989,15 @@ const strip = items.map((h) => `<span style="display:inline-flex;gap:22px">${h}<
 rail.innerHTML = strip + strip;
 
 /* ── la corrida real, reproducida ────────────────────── */
-const s4 = settled.find((e) => e.bountyId === "4") ?? settled[0];
+// Nunca caer a otro pago: con settled[0] la página mostró «5937284 s» cuando el #4 salió de la
+// primera página del explorador. live.js trae el #4 por su hash si no vino en la lista.
+const s4 = settlementFor(settled, 4);
 const pr4 = PULLS[4];
 const secs = Math.round((new Date(s4.time) - new Date(pr4.merged)) / 1000);
 document.getElementById("f-secs").textContent = `${secs} s`;
 document.getElementById("txbtn").href = `${EXPLORER}/tx/${s4.tx}`;
-document.getElementById("src").textContent = live ? "Real events, read live from GIWA Sepolia" : "Real events · snapshot of GIWA Sepolia";
+// «read live» solo si el pago del #4 también vino de la cadena y no de la foto
+document.getElementById("src").textContent = live && !snapshotIds.includes("4") ? "Real events, read live from GIWA Sepolia" : "Real events · snapshot of GIWA Sepolia";
 
 const tx = (h) => `<a href="${EXPLORER}/tx/${h}">${short(h, 8, 4)}</a>`;
 // solo las líneas con hora salen de GitHub o de la cadena; las demás son pasos del agente
