@@ -196,6 +196,19 @@ export const ABI_V3 = [
       { name: "newDeadline", type: "uint64", indexed: false },
     ],
   },
+  // La v4, al finalizar, puede no entregar el ETH: si la dirección del
+  // desarrollador lo rechaza, el importe queda en `owed` y se emite este
+  // evento en vez de entregarlo. Sin declararlo aquí, ese log se salta como
+  // desconocido y el recibo dice "paid" de un dinero que sigue en el escrow.
+  {
+    type: "event",
+    name: "PaymentCredited",
+    inputs: [
+      { name: "bountyId", type: "uint256", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
   {
     type: "function",
     name: "postBounty",

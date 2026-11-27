@@ -29,6 +29,7 @@ import {
   args,
 } from "./chain.mjs";
 import { verifyPullRequest } from "./verify.mjs";
+import { creditedToDeveloper } from "./receipt.mjs";
 
 /** La clave del agente: variable de entorno en CI, archivo local en la laptop. */
 function agentKey() {
@@ -179,14 +180,27 @@ async function finalizeBounty({ bountyId, contract, bounty, result, send }) {
     return { ...result, stage: "reverted", ok: false, tx: hash, url: `${EXPLORER}/tx/${hash}`, reason: `the finalize transaction ${hash} reverted on chain` };
   }
   let event = null;
+  const creditos = [];
   for (const log of receipt.logs) {
     try {
       const e = decodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics });
       if (e.eventName === "BountySettled") event = e.args;
+      if (e.eventName === "PaymentCredited") creditos.push(e);
     } catch {
       // un log ajeno en el mismo recibo
     }
   }
+  // La v4 puede finalizar sin entregar: si la dirección del desarrollador
+  // rechazó el ETH, el payout quedó en `owed` y el recibo de la transacción
+  // trae el PaymentCredited. Eso no es un pago entregado y quien llame tiene
+  // que poder contarlo como lo que es. La comisión acreditada no cuenta:
+  // creditedToDeveloper exige la dirección del desarrollador y el payout
+  // exacto que salió de quote.
+  const credited = creditedToDeveloper(creditos, {
+    bountyId,
+    developer: bounty.developer,
+    payout: result.payout,
+  });
   return {
     ...result,
     stage: "paid",
@@ -197,6 +211,7 @@ async function finalizeBounty({ bountyId, contract, bounty, result, send }) {
     block: receipt.blockNumber,
     gasUsed: receipt.gasUsed,
     event,
+    credited,
     url: `${EXPLORER}/tx/${hash}`,
   };
 }
@@ -270,7 +285,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
 
   console.log(`4. ${r.finalized ? "finalizado" : "liquidado"} en el bloque ${r.block} (gas ${r.gasUsed})\n`);
-  console.log(`   pagado al desarrollador: ${formatEther(r.event.paidToDeveloper)} ETH`);
+  // Un pago acreditado no está pagado: el ETH sigue en el escrow y el
+  // desarrollador lo saca con withdrawTo. Decir "pagado" aquí sería mentir
+  // en el registro de la corrida, igual que en el recibo.
+  if (r.credited > 0n) {
+    console.log(`   acreditado al desarrollador: ${formatEther(r.credited)} ETH (sigue en el escrow)`);
+  } else {
+    console.log(`   pagado al desarrollador: ${formatEther(r.event.paidToDeveloper)} ETH`);
+  }
   console.log(`   comisión de protocolo  : ${formatEther(r.event.protocolFee)} ETH`);
   console.log(`   evidencia on-chain     : ${r.event.evidenceHash}`);
   if (!r.finalized) console.log(`   coincide con el paso 1 : ${r.hashMatches ? "sí" : "NO"}`);
