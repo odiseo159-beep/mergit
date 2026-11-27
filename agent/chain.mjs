@@ -240,6 +240,19 @@ export const ABI_V3 = [
     inputs: [{ name: "bountyId", type: "uint256" }, { name: "newDeadline", type: "uint64" }],
     outputs: [],
   },
+  // v4: si la dirección del desarrollador rechaza el ETH, `_pay` lo deja en
+  // `owed` y emite este evento en vez de entregarlo. El agente lo lee con este
+  // ABI; sin él el log aparece como desconocido y el recibo miente diciendo
+  // "paid" cuando el dinero sigue en el escrow.
+  {
+    type: "event",
+    name: "PaymentCredited",
+    inputs: [
+      { name: "bountyId", type: "uint256", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
 ];
 
 export const publicClient = createPublicClient({ chain: giwaSepolia, transport: http() });

@@ -30,15 +30,13 @@ import { escrowAddress } from "./chain.mjs";
 import { resolveWallet, registryAddress } from "./registry.mjs";
 import { listBounties, isLive, closedIssues, bountyForIssue, pointsAtIssue, pointsAtRepo, settlementOf, LINEA_BOUNTY } from "./bounties.mjs";
 import { verifyPullRequest } from "./verify.mjs";
+import { recibo, RECIBO } from "./receipt.mjs";
 
 // Arriba, con las demás constantes. Estaba al final del fichero, y como el bucle
 // que paga corre en el nivel superior antes de llegar ahí, el 3-nov-2026 el
 // agente pagó dos bounties y se cayó al escribir los recibos: "Cannot access
 // 'SITE' before initialization". El dinero salió; el recibo no.
-const SITE = "https://www.mergit.xyz";
 const API = "https://api.github.com";
-/** Marca invisible del recibo, para saber si ya se escribió. */
-const RECIBO = "<!-- mergit-receipt -->";
 const REPO = process.env.GITHUB_REPOSITORY;
 const TOKEN = process.env.GITHUB_TOKEN;
 const EVENT = process.env.GITHUB_EVENT_NAME;
@@ -295,18 +293,28 @@ for (const pr of prs) {
   // intento repone el recibo (ver `reponerRecibo`).
   try {
     const ev = r.event ?? await settlementOf(escrowAddress(), bountyId).catch(() => null);
-    if (!ev) {
-      say(`${tag}: PAID in ${r.url}, but the settlement event could not be read yet. Re-run this workflow to write the receipt.`);
+    // Un finalize puede haber dejado el payout en `owed` en vez de entregarlo.
+    // Se lee del recibo de la transacción (r.credited) o, si no se pudo leer,
+    // de los logs del explorador (ev.credited). Un pago acreditado no está
+    // pagado: el registro y el recibo lo dicen sin usar "PAID"/"paid".
+    const credited = r.credited ?? ev?.credited ?? 0n;
+    if (!ev && credited === 0n) {
+      say(`${tag}: settled in ${r.url}, but the settlement event could not be read yet. Re-run this workflow to write the receipt.`);
       continue;
     }
-    say(`${tag}: PAID ${formatEther(ev.paidToDeveloper)} ETH to ${developer}${r.finalized ? " (finalized after the challenge window)" : ""}. ${r.url}`);
+    const paidToDeveloper = ev?.paidToDeveloper ?? 0n;
+    if (credited > 0n) {
+      say(`${tag}: APPROVED ${formatEther(credited)} ETH credited to ${developer}, still in the escrow${r.finalized ? " (finalized after the challenge window)" : ""}. ${r.url}`);
+    } else {
+      say(`${tag}: PAID ${formatEther(paidToDeveloper)} ETH to ${developer}${r.finalized ? " (finalized after the challenge window)" : ""}. ${r.url}`);
+    }
     await comment(pr.number, recibo({
       bountyId, developer, via: paidVia(who, author), author,
-      paid: ev.paidToDeveloper, fee: ev.protocolFee,
+      paid: paidToDeveloper, fee: ev?.protocolFee ?? 0n, credited,
       headSha: v.evidence.headSha, evidenceHash: ev.evidenceHash, tx: r.tx, url: r.url,
     }));
   } catch (e) {
-    say(`${tag}: PAID in ${r.url}, but writing the receipt failed (${e.message}). Re-run this workflow to write it.`);
+    say(`${tag}: settled in ${r.url}, but writing the receipt failed (${e.message}). Re-run this workflow to write it.`);
   }
 }
 
@@ -391,32 +399,6 @@ function finish() {
   process.exit(0);
 }
 
-function recibo({ bountyId, developer, via, author, paid, fee, headSha, evidenceHash, tx, url }) {
-  return [
-    RECIBO,
-    `**Mergit paid this pull request.**`,
-    ``,
-    `| | |`,
-    `|---|---|`,
-    `| Bounty | #${bountyId} |`,
-    `| Paid to | \`${developer}\` — ${via} |`,
-    `| Amount | ${formatEther(paid)} ETH (protocol fee ${formatEther(fee)} ETH) |`,
-    `| Verified | merged, CI green on head commit \`${headSha.slice(0, 7)}\` |`,
-    `| Evidence hash | \`${evidenceHash}\` |`,
-    `| Transaction | [${tx.slice(0, 10)}…${tx.slice(-4)}](${url}) on GIWA Sepolia |`,
-    ``,
-    `Your record: ${SITE}/p/${author}`,
-    ``,
-    `Put this in your profile README and it will show what your merged work was paid, read straight from the chain:`,
-    ``,
-    "```markdown",
-    `[![Mergit](${SITE}/badge/${author}.svg)](${SITE}/p/${author})`,
-    "```",
-    ``,
-    `Merge it. Get paid.`,
-  ].join("\n");
-}
-
 /**
  * ¿Algún bounty ya liquidado de este trabajo (su línea o los issues que cierra)
  * le pagó a la wallet de este autor? Es más laxo que la evidencia idéntica del
@@ -447,7 +429,9 @@ async function reponerRecibo(pr, bountyId, developer, who, author, r) {
   const previos = await gh(`/repos/${REPO}/issues/${pr.number}/comments?per_page=100`);
   const yaEsta = (previos || []).some((c) => {
     const b = String(c.body || "");
-    return b.includes(RECIBO) || b.startsWith("**Mergit paid this pull request.**");
+    return b.includes(RECIBO)
+      || b.startsWith("**Mergit paid this pull request.**")
+      || b.startsWith("**Mergit approved this payment.");
   });
   if (yaEsta) {
     say(`${tag}: bounty #${bountyId} is already Settled, and its receipt is there. Nothing to do.`);
@@ -465,10 +449,15 @@ async function reponerRecibo(pr, bountyId, developer, who, author, r) {
     return;
   }
   const url = `https://sepolia-explorer.giwa.io/tx/${ev.tx}`;
-  say(`${tag}: bounty #${bountyId} was paid to this pull request without a receipt. Writing it now. ${url}`);
+  const credited = ev.credited ?? 0n;
+  if (credited > 0n) {
+    say(`${tag}: bounty #${bountyId} was credited to this pull request (still in the escrow) without a receipt. Writing it now. ${url}`);
+  } else {
+    say(`${tag}: bounty #${bountyId} was paid to this pull request without a receipt. Writing it now. ${url}`);
+  }
   await comment(pr.number, recibo({
     bountyId, developer, via: paidVia(who, author), author,
-    paid: ev.paidToDeveloper, fee: ev.protocolFee,
+    paid: ev.paidToDeveloper, fee: ev.protocolFee, credited,
     headSha: r.verdict.evidence.headSha, evidenceHash: ev.evidenceHash, tx: ev.tx, url,
   }));
 }
