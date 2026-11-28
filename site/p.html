@@ -218,14 +218,18 @@ const EXPLORER = "https://sepolia-explorer.giwa.io";
 const GH = "https://api.github.com";
 const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
 
-// Los dos escrows. La v1 guarda la historia de pagos; la v2 suma la ventana de
-// objeción. Un perfil honesto tiene que mirar los dos y decir cuál fue cuál.
+// Los escrows desplegados. La v1 guarda la historia de pagos; las siguientes
+// versiones añaden la ventana de objeción, plazos extensibles y crédito de
+// pagos que no se pudieron entregar. Un perfil honesto tiene que mirar todos y
+// decir cuál fue cuál.
 // `from` es el primer bounty con un pull request real detrás: en la v1 los dos
 // primeros fueron pruebas del contrato el 31-jul, sin trabajo que pagar, y no
 // cuentan como historial de nadie. Es la misma regla que aplica media/live.js.
 const ESCROWS = [
   { v: "v1", address: "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879", from: 3 },
   { v: "v2", address: "0x48d506080abdbed11f1acbe40f799301d9612ad5", from: 1 },
+  { v: "v3", address: "0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0", from: 1 },
+  { v: "v4", address: "0x9968834566b8be8fb023e7c81e95597d713edf2b", from: 1 },
 ];
 
 const ABI = [
@@ -572,6 +576,7 @@ function taskCell(uri) {
 
 function tagFor(state) {
   if (state === "paid") return '<span class="tag good"><i></i>Paid</span>';
+  if (state === "credited") return '<span class="tag wait"><i></i>Credited, waiting to be withdrawn</span>';
   if (state === "self") return '<span class="tag"><i></i>Self-funded</span>';
   if (state === "pending") return '<span class="tag wait"><i></i>Pending</span>';
   return '<span class="tag bad"><i></i>Unknown</span>';
@@ -761,7 +766,7 @@ async function load() {
   renderClaim(login, claim, proof);
   renderShow(login);
 
-  // Los pagos: los dos escrows, con la etiqueta de cuál fue.
+  // Los pagos: todos los escrows, con la etiqueta de cuál fue.
   const want = claim.wallet.toLowerCase();
 
   // Las wallets anteriores de este login, cada una con su ventana. Solo se
@@ -803,6 +808,9 @@ async function load() {
       for (const e of events) {
         if (e.kind === "BountySettled" || e.kind === "BountyRefunded") cerrados.add(String(e.bountyId));
       }
+      const credited = new Set(
+        events.filter((e) => e.kind === "PaymentCredited").map((e) => String(e.bountyId)),
+      );
       const ahora = Math.floor(Date.now() / 1000);
       for (const [id, b] of puestos) {
         if (cerrados.has(id) || Number(id) < from) continue;
@@ -816,7 +824,10 @@ async function load() {
         const self = funder === want;
         const uri = (puestos.get(String(e.bountyId)) || {}).uri;
         const antigua = String(e.developer || "").toLowerCase() !== want;
-        if (e.kind === "BountySettled") paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : "paid" });
+        if (e.kind === "BountySettled") {
+          const state = credited.has(String(e.bountyId)) ? "credited" : self ? "self" : "paid";
+          paid.push({ ...e, v, funder, self, uri, antigua, state });
+        }
         if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, uri, antigua, state: "pending" });
       }
     } catch {
@@ -833,7 +844,7 @@ async function load() {
 
   // El titular solo cuenta lo que pagó otro. Lo que alguien se paga a sí mismo
   // se muestra, porque está en la cadena, pero no suma a su historial.
-  const earned = paid.filter((e) => !e.self);
+  const earned = paid.filter((e) => !e.self && e.state !== "credited");
   const selfFunded = paid.length - earned.length;
   const total = earned.reduce((n, e) => n + BigInt(e.paidToDeveloper ?? 0n), 0n);
   $("stats").hidden = false;
@@ -851,7 +862,7 @@ async function load() {
   $("s-count").textContent = String(earned.length);
   $("s-count-sub").textContent = [
     stillPending.length ? `${stillPending.length} waiting out a challenge window` : "",
-    selfFunded ? `${selfFunded} self-funded, not counted` : "",
+    selfFunded ? `${selfFunded} self-funded or credited, not counted` : "",
   ].filter(Boolean).join(" · ") || "paid by somebody else";
   if (claim.source === "profile") {
     $("s-since-label").textContent = "Wallet comes from";
@@ -864,7 +875,7 @@ async function load() {
 
   $("src").textContent = reached === ESCROWS.length ? "read from the chain" : "partially read";
   $("paid-note").textContent = reached !== ESCROWS.length
-    ? "One of the two escrows did not answer, so this list may be incomplete. Reload in a moment."
+    ? "One of the escrows did not answer, so this list may be incomplete. Reload in a moment."
     : claim.source === "profile"
       ? "The record follows every address this login has published, not just today's. Change the address in your README and what you were already paid stays here."
       : "Payments made before this login was claimed may have gone to a different address, and would not appear here. The record follows the wallet in the registry, not the person.";
