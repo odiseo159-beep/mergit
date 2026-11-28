@@ -218,14 +218,16 @@ const EXPLORER = "https://sepolia-explorer.giwa.io";
 const GH = "https://api.github.com";
 const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
 
-// Los dos escrows. La v1 guarda la historia de pagos; la v2 suma la ventana de
-// objeción. Un perfil honesto tiene que mirar los dos y decir cuál fue cuál.
+// Los escrows. La v1 guarda la historia de pagos; la v2 suma la ventana de
+// objeción; la v3 y v4 extienden funcionalidades y acreditación.
 // `from` es el primer bounty con un pull request real detrás: en la v1 los dos
 // primeros fueron pruebas del contrato el 31-jul, sin trabajo que pagar, y no
 // cuentan como historial de nadie. Es la misma regla que aplica media/live.js.
 const ESCROWS = [
   { v: "v1", address: "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879", from: 3 },
   { v: "v2", address: "0x48d506080abdbed11f1acbe40f799301d9612ad5", from: 1 },
+  { v: "v3", address: "0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0", from: 1 },
+  { v: "v4", address: "0x9968834566b8be8fb023e7c81e95597d713edf2b", from: 1 },
 ];
 
 const ABI = [
@@ -572,6 +574,7 @@ function taskCell(uri) {
 
 function tagFor(state) {
   if (state === "paid") return '<span class="tag good"><i></i>Paid</span>';
+  if (state === "credited") return '<span class="tag wait"><i></i>Credited, waiting to be withdrawn</span>';
   if (state === "self") return '<span class="tag"><i></i>Self-funded</span>';
   if (state === "pending") return '<span class="tag wait"><i></i>Pending</span>';
   return '<span class="tag bad"><i></i>Unknown</span>';
@@ -809,16 +812,23 @@ async function load() {
         if (b.deadline && b.deadline <= ahora) continue;
         abiertos.push({ id, ...b });
       }
-      for (const e of events) {
-        if (!esSuya(e.developer, e.time)) continue;
-        if (Number(e.bountyId) < from) continue;
-        const funder = funders.get(String(e.bountyId)) ?? "";
-        const self = funder === want;
-        const uri = (puestos.get(String(e.bountyId)) || {}).uri;
-        const antigua = String(e.developer || "").toLowerCase() !== want;
-        if (e.kind === "BountySettled") paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : "paid" });
-        if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, uri, antigua, state: "pending" });
+    const credited = new Set();
+    for (const e of events) {
+      if (e.kind === "PaymentCredited") credited.add(String(e.bountyId));
+    }
+    for (const e of events) {
+      if (!esSuya(e.developer, e.time)) continue;
+      if (Number(e.bountyId) < from) continue;
+      const funder = funders.get(String(e.bountyId)) ?? "";
+      const self = funder === want;
+      const uri = (puestos.get(String(e.bountyId)) || {}).uri;
+      const antigua = String(e.developer || "").toLowerCase() !== want;
+      if (e.kind === "BountySettled") {
+        const isCredited = credited.has(String(e.bountyId));
+        paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : isCredited ? "credited" : "paid" });
       }
+      if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, uri, antigua, state: "pending" });
+    }
     } catch {
       // un escrow que no responde no puede inventar un pago: se cuenta como no leído
     }
