@@ -878,6 +878,7 @@ async function load() {
   $("s-count-sub").textContent = [
     stillPending.length ? `${stillPending.length} waiting out a challenge window` : "",
     selfFunded ? `${selfFunded} self-funded, not counted` : "",
+    credited.length ? `${credited.length} credited, waiting to be withdrawn` : "",
   ].filter(Boolean).join(" · ") || "paid by somebody else";
   if (claim.source === "profile") {
     $("s-since-label").textContent = "Wallet comes from";
