@@ -218,14 +218,18 @@ const EXPLORER = "https://sepolia-explorer.giwa.io";
 const GH = "https://api.github.com";
 const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
 
-// Los dos escrows. La v1 guarda la historia de pagos; la v2 suma la ventana de
-// objeción. Un perfil honesto tiene que mirar los dos y decir cuál fue cuál.
+// Los escrows desplegados. La v1 guarda la historia de pagos; la v2 suma la
+// ventana de objeción; la v3 alarga el plazo; la v4, cuando no puede entregar el
+// dinero, lo deja acreditado al desarrollador en vez de bloquearlo. Las cuatro
+// han pagado, así que un expediente honesto mira las cuatro y dice cuál fue cuál.
 // `from` es el primer bounty con un pull request real detrás: en la v1 los dos
 // primeros fueron pruebas del contrato el 31-jul, sin trabajo que pagar, y no
 // cuentan como historial de nadie. Es la misma regla que aplica media/live.js.
 const ESCROWS = [
   { v: "v1", address: "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879", from: 3 },
   { v: "v2", address: "0x48d506080abdbed11f1acbe40f799301d9612ad5", from: 1 },
+  { v: "v3", address: "0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0", from: 1 },
+  { v: "v4", address: "0x9968834566b8be8fb023e7c81e95597d713edf2b", from: 1 },
 ];
 
 const ABI = [
@@ -574,6 +578,9 @@ function tagFor(state) {
   if (state === "paid") return '<span class="tag good"><i></i>Paid</span>';
   if (state === "self") return '<span class="tag"><i></i>Self-funded</span>';
   if (state === "pending") return '<span class="tag wait"><i></i>Pending</span>';
+  // La v4: el escrow lo intentó, no pudo entregar y lo dejó acreditado. No es un
+  // pago todavía, y decir "Paid" aquí sería mentir en la única columna que importa.
+  if (state === "credited") return '<span class="tag wait"><i></i>Credited, waiting to be withdrawn</span>';
   return '<span class="tag bad"><i></i>Unknown</span>';
 }
 
@@ -650,9 +657,9 @@ document.addEventListener("click", async (e) => {
   setTimeout(() => (b.textContent = antes), 1600);
 });
 
-function renderPayments(wallet, paid, pending, abiertos) {
+function renderPayments(wallet, paid, pending, abiertos, credits = []) {
   const out = $("paid-out");
-  if (!paid.length && !pending.length) {
+  if (!paid.length && !pending.length && !credits.length) {
     // Un expediente vacío no se queda en "nada que enseñar": enseña lo que hay
     // abierto ahora mismo. Es la única pantalla que ve alguien que todavía no
     // cobró, y es la que tiene que decirle qué hacer.
@@ -679,9 +686,12 @@ function renderPayments(wallet, paid, pending, abiertos) {
         : "");
     return;
   }
-  const rows = [...pending, ...paid].map((e) => {
+  // Pendientes primero (una ventana de objeción abierta), después lo acreditado
+  // que todavía no salió del escrow, y al final lo pagado de verdad.
+  const rows = [...pending, ...credits, ...paid].map((e) => {
     const when = e.time ? day(e.time) : "";
-    const amount = e.paidToDeveloper ? `${eth(e.paidToDeveloper)} ETH` : "waiting";
+    const entregado = e.state === "credited" ? (e.creditedAmount ?? e.paidToDeveloper) : e.paidToDeveloper;
+    const amount = entregado ? `${eth(entregado)} ETH` : "waiting";
     const fee = e.protocolFee ? `${eth(e.protocolFee)} ETH` : "—";
     return `<tr>
       <td><b>#${esc(e.bountyId)}</b></td>
@@ -780,6 +790,7 @@ async function load() {
   };
   const paid = [];
   const pending = [];
+  const credits = [];
   const abiertos = [];
   let reached = 0;
   for (const { v, address, from } of ESCROWS) {
@@ -809,6 +820,16 @@ async function load() {
         if (b.deadline && b.deadline <= ahora) continue;
         abiertos.push({ id, ...b });
       }
+      // La v4 no siempre puede entregar el dinero. Cuando el envío falla, en vez
+      // de bloquear el pago lo acredita al desarrollador y emite PaymentCredited,
+      // que trae el destinatario en `to` y el monto acreditado. Ese evento se
+      // cruza con su BountySettled: si el destinatario es el mismo, el pago quedó
+      // acreditado y no entregado, y la fila no puede decir "Paid".
+      const acreditado = new Map();
+      for (const e of events) {
+        if (e.kind !== "PaymentCredited") continue;
+        acreditado.set(String(e.bountyId), e);
+      }
       for (const e of events) {
         if (!esSuya(e.developer, e.time)) continue;
         if (Number(e.bountyId) < from) continue;
@@ -816,6 +837,15 @@ async function load() {
         const self = funder === want;
         const uri = (puestos.get(String(e.bountyId)) || {}).uri;
         const antigua = String(e.developer || "").toLowerCase() !== want;
+        const credito = acreditado.get(String(e.bountyId));
+        if (e.kind === "BountySettled" && credito
+            && String(credito.to || "").toLowerCase() === String(e.developer || "").toLowerCase()) {
+          credits.push({
+            ...e, v, funder, self, uri, antigua, state: "credited",
+            creditedAmount: credito.amount, creditedTx: credito.tx, creditedTime: credito.time,
+          });
+          continue;
+        }
         if (e.kind === "BountySettled") paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : "paid" });
         if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, uri, antigua, state: "pending" });
       }
@@ -824,12 +854,13 @@ async function load() {
     }
   }
   // Un pago ya liquidado deja de estar pendiente.
-  const settledIds = new Set(paid.map((e) => `${e.v}#${e.bountyId}`));
+  const settledIds = new Set([...paid, ...credits].map((e) => `${e.v}#${e.bountyId}`));
   const stillPending = pending.filter((e) => !settledIds.has(`${e.v}#${e.bountyId}`));
 
   paid.sort((a, b) => Number(b.block) - Number(a.block));
+  credits.sort((a, b) => Number(b.block) - Number(a.block));
   stillPending.sort((a, b) => Number(b.block) - Number(a.block));
-  renderPayments(claim.wallet, paid, stillPending, abiertos);
+  renderPayments(claim.wallet, paid, stillPending, abiertos, credits);
 
   // El titular solo cuenta lo que pagó otro. Lo que alguien se paga a sí mismo
   // se muestra, porque está en la cadena, pero no suma a su historial.
@@ -851,6 +882,7 @@ async function load() {
   $("s-count").textContent = String(earned.length);
   $("s-count-sub").textContent = [
     stillPending.length ? `${stillPending.length} waiting out a challenge window` : "",
+    credits.length ? `${credits.length} credited, waiting to be withdrawn` : "",
     selfFunded ? `${selfFunded} self-funded, not counted` : "",
   ].filter(Boolean).join(" · ") || "paid by somebody else";
   if (claim.source === "profile") {
@@ -864,7 +896,7 @@ async function load() {
 
   $("src").textContent = reached === ESCROWS.length ? "read from the chain" : "partially read";
   $("paid-note").textContent = reached !== ESCROWS.length
-    ? "One of the two escrows did not answer, so this list may be incomplete. Reload in a moment."
+    ? "One of the escrows did not answer, so this list may be incomplete. Reload in a moment."
     : claim.source === "profile"
       ? "The record follows every address this login has published, not just today's. Change the address in your README and what you were already paid stays here."
       : "Payments made before this login was claimed may have gone to a different address, and would not appear here. The record follows the wallet in the registry, not the person.";
