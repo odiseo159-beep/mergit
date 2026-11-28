@@ -60,6 +60,7 @@ test("fundLink arma el enlace de /post y no firma nada", async (t) => {
   assert.deepEqual(r.already_funded, []);
   assert.equal(r.warning, undefined);
   assert.match(r.what_the_page_does, /pull request/);
+  assert.match(r.what_the_page_does, /Bounty: #N/);
   assert.doesNotMatch(r.what_the_page_does, /paste in the issue/);
   await assert.rejects(() => fundLink({ issue_url: "https://github.com/a/b", amount_eth: "1" }));
   await assert.rejects(() => fundLink({ issue_url: ISSUE, amount_eth: "0" }));

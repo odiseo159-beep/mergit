@@ -440,12 +440,13 @@ export async function fundLink({ issue_url, amount_eth = "0.0005" }) {
     before_funding: [
       "The issue should state what done looks like as facts a machine can check (tests that pass, a function that returns X). Use the prompt `write_bounty_spec`.",
       "Label the issue `bounty` so it shows in the lists.",
+      "If the issue already has a live bounty, do not fund it a second time.",
       `If the repository is not connected yet: ${SITE}/start`,
     ],
   };
   if (ya?.length) {
     const cuales = ya.map((b) => `Bounty: #${b.bounty} (${b.reward_eth} ETH, escrow ${b.escrow})`).join(", ");
-    out.warning = `This issue already has a live bounty: ${cuales}. One bounty per issue: fund another issue instead.`;
+    out.warning = `This issue already has a live bounty: ${cuales}. One bounty per issue: only the bounty a pull request names can pay, so fund another issue instead.`;
   } else if (ya === null) {
     out.note = "Could not read the chain, so this could not check whether the issue already has a live bounty. The /post page warns before funding an issue that already has one.";
   }
