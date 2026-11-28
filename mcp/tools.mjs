@@ -396,22 +396,79 @@ export async function builderRecord({ login }) {
 
 // ─────────────────────── 5 · Preparar un bounty (firma el humano) ───────────────────────
 
-export function fundLink({ issue_url, amount_eth = "0.0005" }) {
+/**
+ * Los bounties vivos de los dos escrows, leídos de la cadena.
+ *
+ * Se pregunta escrow por escrow, con `address`, porque en esa forma
+ * `listBounties` **lanza** si el explorador no responde. Con la forma sin
+ * argumentos se traga la caída y devuelve una lista vacía, que aquí se leería
+ * como "este issue no tiene bounty", y eso es justo lo que no se puede decir
+ * cuando no se sabe.
+ */
+async function bountiesVivos() {
+  const catalogos = await Promise.all(
+    [ESCROWS.v1.address, ESCROWS.v2.address].map((address) => listBounties({ address })),
+  );
+  return catalogos.flat();
+}
+
+/**
+ * El enlace de /post para financiar un issue, con el aviso de si ese issue ya
+ * tiene un bounty vivo.
+ *
+ * `/post` ya bloquea financiar dos veces el mismo issue, pero para entonces el
+ * usuario ya abrió la página: la IA tiene que decirlo antes. El 26 de noviembre
+ * eso produjo dos bounties sobre un issue con quince segundos de diferencia.
+ *
+ * Si la cadena no se puede leer, el enlace se devuelve igual, con
+ * `already_funded: null` y una nota: callar el fallo sería peor que no mirar.
+ */
+export async function fundLink({ issue_url, amount_eth = "0.0005" }) {
   const issue = parseIssue(issue_url);
   if (!issue) throw new Error("a bounty pays for one GitHub issue: give a link like https://github.com/owner/repo/issues/12");
   const monto = eth(wei(amount_eth));
   if (wei(monto) === 0n) throw new Error("the amount must be more than zero");
   const uri = `https://github.com/${issue.owner}/${issue.repo}/issues/${issue.number}`;
   const link = `${SITE}/post?` + new URLSearchParams({ uri, amount: monto }).toString();
+
+  // Un bounty por issue: la cadena decide, no la etiqueta ni el texto del issue.
+  const ahora = Date.now();
+  let yaFinanciado = [];
+  let aviso;
+  let nota = null;
+  try {
+    const catalogo = await bountiesVivos();
+    yaFinanciado = catalogo
+      .filter((b) => isLive(b, ahora) && pointsAtIssue(b.uri, issue.owner, issue.repo, issue.number))
+      .map((b) => ({
+        bounty: Number(b.id),
+        escrow: b.escrow,
+        reward_eth: eth(b.amount),
+        deadline: new Date(b.deadline * 1000).toISOString(),
+      }))
+      .sort((a, b) => a.deadline.localeCompare(b.deadline));
+    if (yaFinanciado.length) {
+      const lista = yaFinanciado.map((b) => `#${b.bounty} (${b.escrow}, ${b.reward_eth} ETH)`).join(", ");
+      aviso = `This issue already carries a live bounty: ${lista}. One bounty per issue — funding it again would put two on the same issue, and only the one a pull request names can pay. Take the open one, or fund another issue.`;
+    }
+  } catch (e) {
+    yaFinanciado = null;
+    nota = `The chain could not be read, so this link has not been checked against the open bounties (${e.message}). ${SITE}/post checks again before anything is signed.`;
+  }
+
   return {
     link,
     issue: uri,
     reward_eth: monto,
+    already_funded: yaFinanciado,
+    ...(aviso ? { warning: aviso } : {}),
+    ...(nota ? { note: nota } : {}),
     who_signs: "The user, in their own wallet, on that page. Do not try to sign or send this transaction yourself.",
-    what_the_page_does: "Checks that the repository can pay (Mergit workflow, CI), then locks the ETH in the escrow on GIWA Sepolia and returns the `Bounty: #N` line to paste in the issue.",
+    what_the_page_does: "Checks that the repository can pay (Mergit workflow, CI), then locks the ETH in the escrow on GIWA Sepolia and returns the `Bounty: #N` line to paste in the pull request, not in the issue.",
     before_funding: [
       "The issue should state what done looks like as facts a machine can check (tests that pass, a function that returns X). Use the prompt `write_bounty_spec`.",
       "Label the issue `bounty` so it shows in the lists.",
+      "If the issue already carries a live bounty, do not fund it again: one bounty per issue.",
       `If the repository is not connected yet: ${SITE}/start`,
     ],
   };
