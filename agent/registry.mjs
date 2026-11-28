@@ -105,8 +105,28 @@ async function gh(path, token) {
     },
   });
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`GitHub respondió ${res.status} en ${path}`);
+  if (!res.ok) {
+    const err = new Error(`GitHub respondió ${res.status} en ${path}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
+}
+
+/**
+ * Lee un gist público. El `GITHUB_TOKEN` de Actions no tiene acceso a la API de
+ * gists y responde 403, aunque el gist sea público: con ese token, nadie que
+ * hubiera probado su login con un gist podía cobrar. Ante un 403 se repite sin
+ * token. Si tampoco responde, el error sube y la corrida queda en rojo, sin decirle
+ * a nadie que su prueba es mala.
+ */
+async function ghGist(id, token) {
+  try {
+    return await gh(`/gists/${id}`, token);
+  } catch (e) {
+    if (!token || e.status !== 403) throw e;
+    return gh(`/gists/${id}`);
+  }
 }
 
 /**
@@ -123,7 +143,7 @@ export async function checkProof({ login, wallet, proofURI }, token = process.en
     const [, urlLogin, id] = gist;
     if (!owns(urlLogin)) return { ok: false, reason: `the gist URL is not under @${login}` };
 
-    const data = await gh(`/gists/${id}`, token);
+    const data = await ghGist(id, token);
     if (!data) return { ok: false, reason: "the gist does not exist" };
     if (!owns(data.owner?.login)) return { ok: false, reason: `the gist belongs to @${data.owner?.login}` };
 

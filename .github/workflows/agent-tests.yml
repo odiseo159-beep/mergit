@@ -42,6 +42,11 @@ jobs:
         working-directory: agent
         run: npm ci
 
+      # `node --test` sin argumentos y no `node --test test/`. Desde Node 21 los
+      # argumentos son patrones de archivo, y un directorio suelto se toma como un
+      # archivo que no existe: con Node 22 la corrida fallaba antes de ejecutar
+      # ningún test (comprobado el 24-nov). Sin argumentos busca solo los archivos
+      # de test, incluidos los de `test/`, y deja fuera node_modules.
       - name: Test
         working-directory: agent
-        run: node --test test/
+        run: node --test

@@ -28,31 +28,61 @@ export const eth = (wei) => {
 };
 export const short = (h, a = 6, b = 4) => `${h.slice(0, a)}…${h.slice(-b)}`;
 
-/** { settled: [...], posted: [...], live: bool } con los eventos más nuevos primero. */
+const decode = (it) => {
+  const p = Object.fromEntries(it.decoded.parameters.map((x) => [x.name, x.value]));
+  return { kind: it.decoded.method_call.split("(")[0], tx: it.transaction_hash, block: it.block_number, time: it.block_timestamp, ...p };
+};
+const getJSON = async (path) => {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 6000);
+  try {
+    const res = await fetch(`${EXPLORER}${path}`, { signal: ctl.signal });
+    if (!res.ok) throw new Error(res.status);
+    return await res.json();
+  } finally { clearTimeout(t); }
+};
+
+/** { settled, posted, live, snapshotIds } con los eventos más nuevos primero.
+ *  live = la lista vino del explorador; snapshotIds = bounties de PULLS que salieron de la foto. */
 export async function loadActivity() {
   let events = SNAPSHOT;
   let live = false;
   try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 6000);
-    const res = await fetch(`${EXPLORER}/api/v2/addresses/${ESCROW}/logs`, { signal: ctl.signal });
-    clearTimeout(t);
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
-    events = data.items
-      .filter((it) => it.decoded)
-      .map((it) => {
-        const p = Object.fromEntries(it.decoded.parameters.map((x) => [x.name, x.value]));
-        return { kind: it.decoded.method_call.split("(")[0], tx: it.transaction_hash, block: it.block_number, time: it.block_timestamp, ...p };
-      });
+    const data = await getJSON(`/api/v2/addresses/${ESCROW}/logs`);
+    events = data.items.filter((it) => it.decoded).map(decode);
     live = true;
   } catch {
     // se queda con la foto
   }
   const real = events.filter((e) => Number(e.bountyId) >= FIRST_REAL);
-  return {
-    live,
-    settled: real.filter((e) => e.kind === "BountySettled"),
-    posted: real.filter((e) => e.kind === "BountyPosted"),
-  };
+  const settled = real.filter((e) => e.kind === "BountySettled");
+  const posted = real.filter((e) => e.kind === "BountyPosted");
+
+  // El explorador devuelve solo los 50 eventos más nuevos. Desde Season 0 el pago del
+  // bounty #4 (el del replay de 20 s) quedó en la segunda página, y la portada calculaba los
+  // segundos contra otro pago (mostraba «5937284 s»). Los pagos de PULLS tienen hash conocido:
+  // si no vinieron en la lista, se leen de la cadena por su transacción. La foto solo se usa si
+  // esa lectura también falla, y entonces se informa en snapshotIds.
+  const snapshotIds = [];
+  for (const id of Object.keys(PULLS)) {
+    if (settled.some((e) => e.bountyId === id)) continue;
+    const snap = SNAPSHOT.find((e) => e.kind === "BountySettled" && e.bountyId === id);
+    if (!snap) continue;
+    try {
+      const data = await getJSON(`/api/v2/transactions/${snap.tx}/logs`);
+      const ev = data.items
+        .filter((it) => it.decoded && it.address?.hash?.toLowerCase() === ESCROW)
+        .map(decode)
+        .find((e) => e.kind === "BountySettled" && e.bountyId === id);
+      if (!ev) throw new Error("no está en la tx");
+      settled.push(ev);
+    } catch {
+      settled.push(snap);
+      snapshotIds.push(id);
+    }
+  }
+  return { live, settled, posted, snapshotIds };
 }
+
+/** El pago que disparó un PR concreto, o null. Nunca cae a otro pago. */
+export const settlementFor = (settled, id) => settled.find((e) => e.kind === "BountySettled" && e.bountyId === String(id)) ?? null;

@@ -1,0 +1,57 @@
+# Vigilante central: busca bounties de repositorios que no instalaron Mergit y
+# dice cuáles pagaría. El código está en agent/watch.mjs.
+#
+# ─────────────────────── Por qué corre en ensayo ────────────────────────
+#
+# Este job **no recibe el secreto MERGIT_AGENT_KEY**. Sin la clave no puede
+# firmar aunque el código lo intente: el ensayo es estructural, no un flag que
+# alguien podría olvidar.
+#
+# Además corre el código de `main`, y `main` no es lo que firma. Un pull request
+# ajeno que toque `agent/` pasa a ser el código de esta corrida. Mientras no
+# tenga la clave da igual. El día que pague de verdad, en el mismo cambio:
+#   1. que corra desde un tag movido a mano, como mergit.yml, y no desde main;
+#   2. que reciba el secreto y llame a `node watch.mjs --send`;
+#   3. que comparta el grupo de concurrencia `mergit-settle` con mergit.yml, porque
+#      los dos firman con la misma clave y dos envíos a la vez chocan en el nonce.
+#      mergit-demo firma con esa misma clave desde otro repositorio, así que
+#      también hay que coordinarlo.
+#
+# ⚠️ En un repositorio público, un workflow programado se apaga solo a los 60
+# días sin actividad. Mismo aviso que watchdog.yml.
+name: Watch
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mergit-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Find payable bounties in other repositories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+
+      - name: Install
+        working-directory: agent
+        run: npm ci
+
+      - name: Rehearse
+        working-directory: agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node watch.mjs

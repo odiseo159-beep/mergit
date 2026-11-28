@@ -31,3 +31,5 @@ notas/
 brand/
 concepts/
 .claude/
+*.token
+graphify-out/

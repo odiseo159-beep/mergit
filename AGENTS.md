@@ -26,6 +26,45 @@ agent holding a key is an operator.
 
 ---
 
+## The shortcut: Mergit as tools (MCP)
+
+If your client speaks MCP (Claude Code, Claude Desktop, Codex, Cursor and others do), your user can
+give you Mergit as six tools instead of this document. Every task below has a tool:
+
+| Tool | What it answers |
+|---|---|
+| `mergit_list_open_bounties` | which issues have ETH locked on them right now, read from the chain |
+| `mergit_get_bounty` | one bounty, live: open, pending, paid or refunded, and to whom |
+| `mergit_check_pull_request` | would merging this pay, how much, to which wallet, and what blocks it |
+| `mergit_builder_record` | what the escrows paid a GitHub login, self-funded payments excluded |
+| `mergit_fund_link` | a link where the user's wallet locks a bounty for an issue |
+| `mergit_payout_setup` | whether a login can be paid, and the two ways to fix it if not |
+
+Plus a prompt, `write_bounty_spec`. The server is read-only: it has no key and signs nothing. A test
+fails if its code names a key or a signing call, or imports the agent's signing scripts. It is on
+npm as [`mergit-mcp`](https://www.npmjs.com/package/mergit-mcp) and runs on the user's machine:
+
+```
+claude mcp add mergit -- npx -y mergit-mcp
+```
+
+For Codex, in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.mergit]
+command = "npx"
+args = ["-y", "mergit-mcp"]
+```
+
+For Claude Desktop or Cursor, in `mcpServers`: `{ "mergit": { "command": "npx", "args": ["-y", "mergit-mcp"] } }`.
+On Windows, if the client cannot find `npx`, use `cmd /c npx -y mergit-mcp`. To run it from source
+instead, see `mcp/README.md` in the repository.
+
+It uses the public GitHub API, 60 requests an hour without a token. Setting `GITHUB_TOKEN` in the
+server's environment raises that; the token only needs to read public repositories.
+
+---
+
 ## Task 1 — your user wants to pay someone for work
 
 This is the most useful thing you can do with Mergit, and it fits a moment that happens constantly:
@@ -71,7 +110,7 @@ jobs:
   settle:
     runs-on: ubuntu-latest
     steps:
-      - uses: odiseo159-beep/mergit@v1
+      - uses: odiseo159-beep/mergit@v1.6
         with:
           agent-key: ${{ secrets.MERGIT_AGENT_KEY }}
 ```
@@ -105,14 +144,20 @@ in `mergit.json` at the root. The on-chain registry always wins over the file.
 
 ## Task 3b — your user wants to take an open bounty
 
-Open bounties are GitHub issues labelled `bounty`. Ask GitHub for them; there is no index to keep
-in sync and nothing to ask us for.
+Open bounties live on the chain, not in a list we keep. With the MCP server, call
+`mergit_list_open_bounties`. Without it, read the `BountyPosted` events (Task 4): each one names the
+issue it pays for, and a bounty is open until a `BountySettled` or `BountyRefunded` with its number
+appears, or its deadline passes. Skip any whose link is not a `github.com/<owner>/<repo>/issues/<n>`:
+funding is open, and nobody can close a bare repository link with a pull request.
+
+The issues behind them carry the label `bounty`. A label is not money, so check the chain before you
+promise your user anything. To see the issues on the two repositories the agent watches today:
 
 ```
-GET https://api.github.com/search/issues?q=repo:odiseo159-beep/mergit+label:bounty+state:open
+GET https://api.github.com/search/issues?q=repo:odiseo159-beep/mergit+repo:odiseo159-beep/mergit-demo+label:bounty+state:open
 ```
 
-Every one of them has the same shape, so you can read it without guessing:
+The issues follow one shape, so you can read them without guessing:
 
 - **What done looks like** — the acceptance criteria. If your change does not satisfy all of them,
   it will not be merged, and nothing that is not merged is paid.
@@ -146,11 +191,14 @@ All of this is public and needs no key.
 |---|---|
 | RPC | `https://sepolia-rpc.giwa.io` |
 | Explorer | `https://sepolia-explorer.giwa.io` |
-| Escrow | `0xffcf206ce1474263aaa3336fb9c8bc3d632e5879` |
-| Escrow with a challenge window | `0x48d506080abdbed11f1acbe40f799301d9612ad5` |
+| Escrow (v1, where the agent pays) | `0xffcf206ce1474263aaa3336fb9c8bc3d632e5879` |
+| Escrow with a challenge window (v2) | `0x48d506080abdbed11f1acbe40f799301d9612ad5` |
+| Escrow v3 (extendable deadline; internal tests only) | `0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0` |
+| Escrow v4 (credits a payment it cannot deliver; internal tests only) | `0x9968834566b8be8fb023e7c81e95597d713edf2b` |
 | Identity registry | `0x79d44543d20c7c6653f6626687d67d2cd7f2af9c` |
 
-All three are source-verified on the explorer, so you can read their ABIs there.
+All of them are source-verified on the explorer, so you can read their ABIs there. Bounty numbers
+repeat between escrows: there is a #1 on each. Always say which escrow a number belongs to.
 
 **To list what actually happened**, do not call `eth_getLogs` against the public RPC: it caps the
 range at 10,000 blocks and you will miss everything older. Use the explorer's API instead, which
@@ -219,8 +267,8 @@ until later. Retroactive funding exists for that problem, and Mergit does not so
 
 ## If something is unclear
 
-The code is public and small: `agent/` holds the verifier, `contracts/` holds the three contracts
-and their tests, `action.yml` is the reusable step. Read those rather than guessing.
+The code is public and small: `agent/` holds the verifier, `contracts/` holds the contracts and
+their tests, `mcp/` holds the tools above, `action.yml` is the reusable step. Read those rather than guessing.
 
 Repository: https://github.com/odiseo159-beep/mergit
 Site: https://www.mergit.xyz

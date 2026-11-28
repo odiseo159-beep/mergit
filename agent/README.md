@@ -43,7 +43,7 @@ Any repository plugs it in with one step, through the action at the root of this
 repository:
 
 ```yaml
-      - uses: odiseo159-beep/mergit@v1.5
+      - uses: odiseo159-beep/mergit@v1.6
         with:
           agent-key: ${{ secrets.MERGIT_AGENT_KEY }}
 ```

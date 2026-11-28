@@ -18,6 +18,9 @@ import { privateKeyToAccount } from "viem/accounts";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const FEE_BPS = 150; // 1.5%, el mismo de la v1
+// Inmutable una vez desplegado. No es la cuenta del agente: esa clave vive en los
+// secretos de GitHub, y una comisión no debe depender de que nunca se filtre.
+const FEE_RECIPIENT = "0x23E8541dA96158d342477D694274E27639807686";
 
 const secrets = JSON.parse(
   readFileSync(new URL("../../WALLETS.secret.json", import.meta.url), "utf8"),
@@ -55,12 +58,12 @@ console.log(
   "ETH",
 );
 console.log("  feeBps       :", FEE_BPS, "(1.5%, igual que la v1)");
-console.log("  feeRecipient :", account.address);
+console.log("  feeRecipient :", FEE_RECIPIENT);
 
 if (!send) {
   // Con los argumentos del constructor dentro, que si no la estimación falla y
   // el ensayo no sirve de nada: lo que se quiere saber es cuánto va a costar.
-  const data = encodeDeployData({ abi: artifact.abi, bytecode: artifact.bytecode, args: [FEE_BPS, account.address] });
+  const data = encodeDeployData({ abi: artifact.abi, bytecode: artifact.bytecode, args: [FEE_BPS, FEE_RECIPIENT] });
   const gas = await publicClient.estimateGas({ account, data }).catch(() => null);
   const precio = await publicClient.getGasPrice().catch(() => null);
   if (gas && precio) {
@@ -71,7 +74,7 @@ if (!send) {
   process.exit(0);
 }
 
-const hash = await wallet.deployContract({ abi: artifact.abi, bytecode: artifact.bytecode, args: [FEE_BPS, account.address] });
+const hash = await wallet.deployContract({ abi: artifact.abi, bytecode: artifact.bytecode, args: [FEE_BPS, FEE_RECIPIENT] });
 console.log("\ntx enviada:", hash);
 
 const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -92,7 +95,7 @@ writeFileSync(
       contract: "MergitEscrowV3",
       address,
       deployer: account.address,
-      constructorArgs: [FEE_BPS, account.address],
+      constructorArgs: [FEE_BPS, FEE_RECIPIENT],
       txHash: hash,
       blockNumber: Number(receipt.blockNumber),
       explorer: `${giwaSepolia.blockExplorers.default.url}/address/${address}`,
@@ -103,4 +106,4 @@ writeFileSync(
   ),
 );
 console.log("\nescrito contracts/deployment-v3.json");
-console.log("Verificar después con:\n  npx hardhat verify --network giwaSepolia", address);
+console.log("Verificar después con:\n  npx hardhat verify --network giwaSepolia", address, FEE_BPS, FEE_RECIPIENT);

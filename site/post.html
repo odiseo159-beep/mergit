@@ -86,6 +86,20 @@ aside{font-family:var(--mono);font-size:13px;line-height:1.75}
 aside h2{font-family:var(--sans);font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:14px}
 .card{border:1px solid var(--line);padding:22px}
 .card+.card{margin-top:18px}
+/* Aegis: el puntaje de riesgo del escrow, con los colores de Aegis (aegisgiwa.com).
+   Solo el número, nunca la categoría: así lo acordamos con su equipo. */
+.aegis{--ae-bg:#0F1729;--ae-card:#1B2438;--ae-line:#26314a;--ae-ink:#F4F7FB;--ae-mute:#9AA7BD;--ae-teal:#00D1B2;
+  background:var(--ae-bg);border-color:var(--ae-line);color:var(--ae-ink)}
+.aegis[hidden]{display:none}
+.ae-h{display:flex;align-items:center;gap:10px;font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--ae-mute)}
+.ae-h img{width:28px;height:28px;border-radius:7px}
+.ae-h b{color:var(--ae-ink);font-weight:700}
+.ae-s{display:flex;align-items:baseline;gap:6px;margin-top:14px;font-family:var(--sans)}
+.ae-s b{font-size:44px;line-height:1;font-weight:800;letter-spacing:-.03em;color:var(--ae-teal)}
+.ae-s span{font-size:15px;color:var(--ae-mute)}
+.ae-c{margin-top:8px;color:var(--ae-mute);font-size:12px;line-height:1.6}
+.ae-l{display:inline-block;margin-top:12px;color:var(--ae-teal);border-bottom:1px solid var(--ae-line)}
+.ae-l:hover{border-color:var(--ae-teal)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;color:var(--mute)}
 .kv b{color:var(--ink);font-weight:500}
 .kv a{color:var(--mute);border-bottom:1px dotted var(--dim)}
@@ -115,7 +129,26 @@ footer{border-top:1px solid var(--line);padding:30px var(--pad);font-family:var(
   display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 footer a:hover{color:var(--ink)}
 
+a.inl{color:var(--ink);border-bottom:1px dotted var(--mute)}
+a.inl:hover{color:var(--red);border-color:var(--red)}
+option:disabled{color:var(--dim)}
+
+.open{margin-top:clamp(64px,10vh,110px);scroll-margin-top:24px}
+.open h2{margin-top:16px;font-weight:800;font-size:clamp(26px,3.2vw,40px);line-height:1.05;letter-spacing:-.03em}
+.ocount{margin-top:22px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--mute)}
+.ocount b{color:var(--ink);font-weight:500}
+.olist{margin-top:14px;border-top:1px solid var(--line)}
+.oi{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 20px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.oi .ot{font-size:15px;line-height:1.45;min-width:0;overflow-wrap:anywhere}
+.oi .ot a:hover{color:var(--red)}
+.oi .om{margin-top:4px;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--dim)}
+.oi .om .f{color:var(--ok)}
+.oi button{margin:0;width:auto;padding:10px 14px;font-size:11px;white-space:nowrap}
+.oi .chip{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ok);border:1px solid rgba(61,220,132,.35);padding:9px 12px;white-space:nowrap}
+.oerr{padding:16px 0;color:var(--mute);font-size:14px;line-height:1.6}
+
 @media (max-width:900px){.grid{grid-template-columns:1fr}.nav .right span{display:none}}
+@media (max-width:560px){.oi{grid-template-columns:1fr}.oi button,.oi .chip{justify-self:start}}
 </style>
 </head>
 <body>
@@ -142,7 +175,7 @@ footer a:hover{color:var(--ink)}
     <form id="form" autocomplete="off">
       <label for="uri">What the bounty is for</label>
       <input id="uri" name="uri" placeholder="https://github.com/owner/repo/issues/7" required>
-      <p class="hint">An issue, a pull request or a repository. It is written into the bounty, on-chain, so anyone can see what was asked for.</p>
+      <p class="hint">An issue, a pull request or a repository. It is written into the bounty, on-chain, so anyone can see what was asked for. No issue in mind? <a href="#open" class="inl">Pick one that is ready to fund</a>.</p>
 
       <div id="pf" class="pf" hidden>
         <div class="pf-h"><span id="pf-dot" class="pf-dot"></span><b id="pf-t">Checking the repository…</b></div>
@@ -164,8 +197,9 @@ footer a:hover{color:var(--ink)}
       <label for="escrow">Escrow</label>
       <select id="escrow" name="escrow">
         <option value="v1">Instant — pays in the same block as the verification</option>
-        <option value="v2">With a challenge window — you can object once before the money leaves</option>
+        <option value="v2" disabled>With a challenge window — coming soon</option>
       </select>
+      <p class="hint">The agent pays instant bounties today. Bounties with a challenge window come back when it reads the new escrow.</p>
 
       <div id="windowbox" style="display:none">
         <label for="window">Challenge window, in hours</label>
@@ -190,7 +224,7 @@ footer a:hover{color:var(--ink)}
         <ol class="steps">
           <li>Point it at an <b>issue</b>. Contributors only write <b>Closes #N</b> in their pull request, and the agent finds the bounty from the issue. They never need the bounty's number.</li>
           <li>The author needs a <b>wallet the agent can read</b>: one line naming Mergit and their address in their GitHub profile README, or their login claimed on-chain.</li>
-          <li>Add the <b>Mergit action</b> to the repository. One step in a workflow.</li>
+          <li>Mergit's agent already runs in the repositories listed <a href="#open" class="inl">below</a>: nothing to install. For <b>your own repository</b>, add the Mergit action with your own verifier key, and put that key's address in Verifier.</li>
           <li><b>Fund first, then merge</b> with CI green. The check <b>mergit/payable</b>, next to the merge button, says whether merging will pay.</li>
         </ol>
       </div>
@@ -200,10 +234,16 @@ footer a:hover{color:var(--ink)}
         <div class="kv">
           <span>Network</span><b>GIWA Sepolia · 91342</b>
           <span>Escrow v1</span><a id="lk1" href="#">0xffcf…5879</a>
-          <span>Escrow v2</span><a id="lk2" href="#">0x48d5…2ad5</a>
           <span>Registry</span><a id="lk3" href="#">0x79d4…af9c</a>
           <span>Protocol fee</span><b>1.5%, capped at 5% in code</b>
         </div>
+      </div>
+
+      <div class="card aegis" id="aegis" hidden aria-live="polite">
+        <div class="ae-h"><img src="/media/aegis.png" alt="" width="28" height="28"><span>Scanned by <b>Aegis</b></span></div>
+        <div class="ae-s"><b id="ae-n">–</b><span>/100 risk</span></div>
+        <p class="ae-c">Score of <span id="ae-e">escrow v1</span>, attested on-chain by Aegis. Lower is safer.</p>
+        <a class="ae-l" id="ae-l" href="https://www.aegisgiwa.com/" target="_blank" rel="noopener">Open the scan →</a>
       </div>
 
       <div class="card">
@@ -214,6 +254,14 @@ footer a:hover{color:var(--ink)}
   </div>
 
   <div class="log" id="log"></div>
+
+  <section class="open" id="open">
+    <p class="kicker">Ready to fund</p>
+    <h2>Open issues where a merge pays</h2>
+    <p class="lede">Mergit's agent runs in these repositories, so a bounty on one of these issues pays itself when the fix is merged with CI green. Pick one and the form fills in.</p>
+    <p class="ocount" id="ocount">Reading the issues and the chain…</p>
+    <div class="olist" id="olist"></div>
+  </section>
 </main>
 
 <footer>
@@ -222,7 +270,7 @@ footer a:hover{color:var(--ink)}
 </footer>
 
 <script type="module">
-import { encodeFunctionData, parseEther, decodeEventLog, formatEther } from "https://esm.sh/viem@2.21.55";
+import { encodeFunctionData, decodeFunctionResult, parseEther, decodeEventLog, formatEther } from "https://esm.sh/viem@2.21.55";
 import { preflight } from "/preflight.js";
 
 const CHAIN_ID = 91342;
@@ -232,6 +280,73 @@ const ESCROW = {
   v2: "0x48d506080abdbed11f1acbe40f799301d9612ad5",
 };
 const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
+
+// El agente de Mergit firma con una clave que solo está en los secretos de estos
+// repositorios. En cualquier otro, un bounty que lo nombre como verificador no
+// lo puede pagar nadie: solo queda el reembolso al vencer. Si el agente empieza
+// a correr en otro repositorio, se agrega aquí.
+const AGENT = "0x28Df38871Ef4BeeBd6B0d8Cd6D4c99Bf4FE3852b";
+const CONNECTED = ["odiseo159-beep/mergit-demo", "odiseo159-beep/mergit"];
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const repoSlug = (u) => (String(u || "").match(/github\.com\/([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)/i)?.[1] ?? "").replace(/\.git$/i, "").toLowerCase();
+const issueKey = (u) => {
+  const m = String(u || "").match(/github\.com\/([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)\/issues\/(\d+)(?![0-9])/i);
+  return m ? `${m[1]}/${m[2]}#${m[3]}`.toLowerCase() : null;
+};
+const agentMissing = (uri, verifier) =>
+  String(verifier || "").trim().toLowerCase() === AGENT.toLowerCase() && !CONNECTED.includes(repoSlug(uri));
+
+/**
+ * Los bounties vivos del escrow instantáneo, por issue: lo que ya está
+ * financiado. `null` mientras no se pudo leer. Un segundo bounty sobre el mismo
+ * issue deja al agente sin saber cuál pagar, y entonces no paga ninguno.
+ */
+let vivos = null;
+
+/** Todas las páginas del explorador, o un error: una lista a medias no sirve. */
+async function logsOf(address) {
+  const out = [];
+  let params = null;
+  for (let pagina = 0; pagina < 40; pagina++) {
+    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    let data;
+    try {
+      const res = await fetch(`${EXPLORER}/api/v2/addresses/${address}/logs${qs}`, { signal: ctl.signal });
+      if (!res.ok) throw new Error(`the explorer answered ${res.status}`);
+      data = await res.json();
+    } finally { clearTimeout(t); }
+    for (const it of data.items || []) {
+      if (!it.decoded) continue;
+      const p = Object.fromEntries(it.decoded.parameters.map((x) => [x.name, x.value]));
+      out.push({ kind: it.decoded.method_call.split("(")[0], ...p });
+    }
+    params = data.next_page_params;
+    if (!params) return out;
+  }
+  throw new Error("the explorer kept paginating");
+}
+
+async function loadFunding() {
+  const ev = await logsOf(ESCROW.v1);
+  const cerrados = new Set(ev.filter((e) => e.kind === "BountySettled" || e.kind === "BountyRefunded").map((e) => String(e.bountyId)));
+  const ahora = Date.now() / 1000;
+  const mapa = new Map();
+  for (const e of ev) {
+    if (e.kind !== "BountyPosted" || cerrados.has(String(e.bountyId))) continue;
+    if (Number(e.deadline) <= ahora) continue;
+    if (String(e.verifier).toLowerCase() !== AGENT.toLowerCase()) continue;
+    const k = issueKey(e.metadataURI);
+    if (!k) continue;
+    const prev = mapa.get(k) ?? { amount: 0n, ids: [] };
+    prev.amount += BigInt(e.amount);
+    prev.ids.push(String(e.bountyId));
+    mapa.set(k, prev);
+  }
+  return mapa;
+}
 
 const ABI_V1 = [
   { type: "function", name: "postBounty", stateMutability: "payable",
@@ -256,7 +371,6 @@ const ABI_V2 = [
 const $ = (id) => document.getElementById(id);
 const hex = (n) => "0x" + BigInt(n).toString(16);
 $("lk1").href = `${EXPLORER}/address/${ESCROW.v1}`;
-$("lk2").href = `${EXPLORER}/address/${ESCROW.v2}`;
 $("lk3").href = `${EXPLORER}/address/${REGISTRY}`;
 
 const log = $("log");
@@ -273,7 +387,44 @@ let account = null;
 
 $("escrow").addEventListener("change", (e) => {
   $("windowbox").style.display = e.target.value === "v2" ? "block" : "none";
+  puntajeAegis(e.target.value);
 });
+
+/* ── Aegis ──────────────────────────────────────────────────────────────
+   El puntaje de riesgo que Aegis atestigua on-chain para el escrow donde se va
+   a bloquear el dinero. Se lee directo de su registro, sin pasar por ningún
+   servidor. Solo el número y el enlace a su vista ?address=, que no muestra la
+   categoría (acordado con Aegis el 25-nov). Si no hay atestación o la lectura
+   falla, la tarjeta no aparece: mejor nada que un número inventado. */
+const AEGIS = "0x6C831F9d7051E94589807D2C3d924bb195b5de94";
+const AEGIS_ABI = [
+  { type: "function", name: "hasAttestation", stateMutability: "view", inputs: [{ name: "a", type: "address" }], outputs: [{ type: "bool" }] },
+  { type: "function", name: "riskOf", stateMutability: "view", inputs: [{ name: "a", type: "address" }], outputs: [{ type: "uint8" }] },
+];
+async function leerAegis(functionName, address) {
+  const data = encodeFunctionData({ abi: AEGIS_ABI, functionName, args: [address] });
+  const r = await fetch("https://sepolia-rpc.giwa.io", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: AEGIS, data }, "latest"] }),
+  });
+  const j = await r.json();
+  if (!j.result || j.error) throw new Error("no answer");
+  return decodeFunctionResult({ abi: AEGIS_ABI, functionName, data: j.result });
+}
+async function puntajeAegis(version) {
+  const card = $("aegis"), address = ESCROW[version];
+  try {
+    if (!(await leerAegis("hasAttestation", address))) { card.hidden = true; return; }
+    const risk = Number(await leerAegis("riskOf", address));
+    $("ae-n").textContent = String(risk);
+    $("ae-e").textContent = `escrow ${version}`;
+    $("ae-l").href = `https://www.aegisgiwa.com/?address=${address}`;
+    card.hidden = false;
+  } catch {
+    card.hidden = true;
+  }
+}
+puntajeAegis($("escrow").value);
 
 /** GIWA Sepolia, para que la wallet la agregue si no la tiene. */
 const GIWA = {
@@ -364,6 +515,15 @@ $("form").addEventListener("submit", async (e) => {
   if (!esIssue && !confirm("This names a repository but not an issue.\n\nWithout an issue, contributors cannot just write \"Closes #N\": they will need the exact line \"Bounty: #N\" with this bounty's number, which changes if you ever refund and fund it again.\n\nLock it anyway?")) {
     return;
   }
+  // Las dos formas de bloquear dinero que nadie va a cobrar, dichas antes de firmar.
+  if (agentMissing(uri, $("verifier").value)
+    && !confirm(`Mergit's agent does not run in ${repoSlug(uri)}, so nobody can sign this payment.\n\nThe only way to get the money back will be a refund after the deadline.\n\nLock it anyway?`)) {
+    return;
+  }
+  const yaFinanciado = vivos?.get(issueKey(uri));
+  if (yaFinanciado && !confirm(`This issue already has a live bounty (#${yaFinanciado.ids.join(", #")}).\n\nWith two bounties on the same issue the agent cannot tell which one to pay, and pays neither.\n\nLock another one anyway?`)) {
+    return;
+  }
   const version = $("escrow").value;
   const address = ESCROW[version];
   const abi = version === "v2" ? ABI_V2 : ABI_V1;
@@ -447,6 +607,7 @@ $("form").addEventListener("submit", async (e) => {
       });
       box.appendChild(copy);
       log.appendChild(box);
+      cargarAbiertos();
     }
   } catch (err) {
     say(`${err.shortMessage ?? err.message}`, "line err");
@@ -487,13 +648,34 @@ $("form").addEventListener("submit", async (e) => {
     }
     if (mio !== corriendo) return;
 
+    // Lo que preflight.js no sabe: quién firma. Con el agente de Mergit como
+    // verificador, solo pagan los repositorios donde corre con su clave.
+    const ver = $("verifier").value.trim().toLowerCase();
+    if (r.repo && ver === AGENT.toLowerCase()) {
+      if (CONNECTED.includes(`${r.repo.owner}/${r.repo.repo}`.toLowerCase())) {
+        r.facts.unshift("Mergit's agent runs in this repository with its signing key.");
+        r.unknowns = r.unknowns.filter((u) => !u.includes("MERGIT_AGENT_KEY"));
+      } else {
+        r.blockers.unshift("Mergit's agent does not run in this repository yet, so nobody can sign the payment. Pick an issue from the list below, or connect the repository with your own verifier key and put that key's address in Verifier.");
+      }
+    }
+    const fin = vivos?.get(issueKey(url));
+    if (fin) {
+      const quien = fin.ids.length > 1
+        ? `bounties #${fin.ids.slice().sort((a, b) => a - b).join(" and #")} hold`
+        : `bounty #${fin.ids[0]} holds`;
+      r.blockers.unshift(`This issue is already funded: ${quien} ${formatEther(fin.amount)} ETH. Another bounty on the same issue stops the payment, because the agent cannot tell which one to pay. Pick an issue that needs funding.`);
+    }
+
     const filas = [
       ...r.blockers.map((t) => ["no", t]),
       ...r.warnings.map((t) => ["warn", t]),
       ...r.facts.map((t) => ["ok", t]),
       ...r.unknowns.map((t) => ["q", t]),
     ];
-    if (r.blockers.length) {
+    if (fin) {
+      pinta("no", "This issue is already funded", filas);
+    } else if (r.blockers.length) {
       pinta("no", "This repository cannot pay yet", filas);
     } else if (r.warnings.length) {
       pinta("warn", "It can pay, with something worth fixing", filas);
@@ -502,15 +684,24 @@ $("form").addEventListener("submit", async (e) => {
     }
   };
 
+  // Cambiar el verificador cambia la respuesta: se vuelve a revisar el mismo repo.
+  let tVer;
+  $("verifier").addEventListener("input", () => {
+    clearTimeout(tVer);
+    tVer = setTimeout(() => { if (ultimo) revisar($("uri").value.trim()); }, 600);
+  });
+  window.__revisar = () => { if (ultimo) revisar($("uri").value.trim()); };
+
   let temporizador;
   $("uri").addEventListener("input", (e) => {
     const v = e.target.value.trim();
     clearTimeout(temporizador);
     if (!/^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(v)) { caja.hidden = true; ultimo = ""; return; }
     temporizador = setTimeout(() => {
-      const slug = v.match(/github\.com\/([^/]+\/[^/?#]+)/i)?.[1] ?? "";
-      if (slug === ultimo) return;
-      ultimo = slug;
+      // Por URL completa y no por repositorio: dos issues del mismo repo pueden
+      // estar uno financiado y el otro no.
+      if (v === ultimo) return;
+      ultimo = v;
       revisar(v);
     }, 600);
   });
@@ -527,6 +718,73 @@ $("form").addEventListener("submit", async (e) => {
   const preAmount = (pre.get("amount") || "").trim();
   if (/^\d*\.?\d+$/.test(preAmount)) $("amount").value = preAmount;
 }
+
+/* ── Issues listos para financiar ───────────────────────────────────────
+   Los issues abiertos con la etiqueta `bounty` de los repositorios donde corre
+   el agente, cruzados con los bounties vivos del escrow. Si la cadena no se
+   puede leer, no se ofrece financiar nada: sin saber qué ya está financiado,
+   un clic podría poner un segundo bounty sobre el mismo issue. */
+async function issuesOf(slug) {
+  const r = await fetch(`https://api.github.com/repos/${slug}/issues?state=open&labels=bounty&per_page=100`,
+    { headers: { Accept: "application/vnd.github+json" } });
+  if (r.status === 403) throw new Error("GitHub rate-limited this browser. Wait a few minutes and reload.");
+  if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+  return (await r.json()).filter((i) => !i.pull_request).map((i) => ({ ...i, slug }));
+}
+
+async function cargarAbiertos() {
+  const lista = $("olist"), cuenta = $("ocount");
+  let issues, mapa;
+  try {
+    [issues, mapa] = await Promise.all([
+      Promise.all(CONNECTED.map(issuesOf)).then((x) => x.flat()),
+      loadFunding(),
+    ]);
+  } catch (e) {
+    cuenta.textContent = "";
+    lista.innerHTML = `<p class="oerr">Could not read the open issues or the bounties on chain (${esc(e.message)}). Nothing is offered until both can be read, so no issue gets funded twice. Reload in a minute.</p>`;
+    return;
+  }
+  vivos = mapa;
+  window.__revisar?.();
+
+  const filas = issues.map((i) => ({ i, f: mapa.get(`${i.slug}#${i.number}`.toLowerCase()) }))
+    .sort((a, b) => (a.f ? 1 : 0) - (b.f ? 1 : 0) || a.i.slug.localeCompare(b.i.slug) || a.i.number - b.i.number);
+  const libres = filas.filter((x) => !x.f).length;
+  cuenta.innerHTML = `<b>${libres}</b> need funding · <b>${filas.length - libres}</b> already funded`;
+  if (!filas.length) {
+    lista.innerHTML = `<p class="oerr">No open bounty issues right now.</p>`;
+    return;
+  }
+  lista.innerHTML = "";
+  for (const { i, f } of filas) {
+    const d = document.createElement("div");
+    d.className = "oi";
+    const repo = i.slug.split("/")[1];
+    d.innerHTML = `<div class="ot"><a href="${esc(i.html_url)}" rel="noopener">${esc(i.title)}</a>
+      <div class="om">${esc(repo)} #${i.number}${f ? ` · <span class="f">${esc(formatEther(f.amount))} ETH locked</span>` : ""}</div></div>`;
+    if (f) {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = "Funded";
+      d.appendChild(chip);
+    } else {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ghost";
+      b.textContent = "Fund this";
+      b.addEventListener("click", () => {
+        $("uri").value = i.html_url;
+        $("uri").dispatchEvent(new Event("input"));
+        $("form").scrollIntoView({ behavior: "smooth", block: "start" });
+        $("amount").focus({ preventScroll: true });
+      });
+      d.appendChild(b);
+    }
+    lista.appendChild(d);
+  }
+}
+cargarAbiertos();
 </script>
 </body>
 </html>
