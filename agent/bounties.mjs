@@ -20,6 +20,8 @@
 // la ambigüedad y no paga nadie**. Quien lo llama puede estrechar con una lista
 // de financiadores aceptados (`funders` en `mergit.json`). Lo que no existe es
 // "quedarse con el primero".
+import { creditedToDeveloper } from "./receipt.mjs";
+
 const EXPLORER = "https://sepolia-explorer.giwa.io";
 
 /** Los dos escrows desplegados. `from` deja fuera los bounties de prueba. */
@@ -110,16 +112,33 @@ export async function listBounties({ address: solo } = {}) {
 /**
  * El evento de pago de un bounty, si existe: a quién, cuánto, con qué evidencia
  * y en qué transacción. Sirve para reponer un recibo que no llegó a escribirse.
+ *
+ * Trae también `credited`: lo que quedó acreditado al desarrollador en vez de
+ * entregado, leído de los `PaymentCredited` del mismo escrow. A `finalize` lo
+ * puede llamar cualquiera, así que el recibo se puede deber a una transacción
+ * que este agente no envió, y lo único que lo cuenta bien son los logs. El
+ * contrato emite el payout completo en `BountySettled` aunque lo acredite,
+ * así que ese es el importe exacto que hay que buscar acreditado.
  */
 export async function settlementOf(address, bountyId) {
-  for (const e of await logsOf(address)) {
+  const logs = await logsOf(address);
+  for (const e of logs) {
     if (e.kind !== "BountySettled" || String(e.bountyId) !== String(bountyId)) continue;
+    const creditos = logs
+      .filter((c) => c.kind === "PaymentCredited" && String(c.bountyId) === String(bountyId))
+      .map((c) => ({ eventName: "PaymentCredited", args: { bountyId: c.bountyId, to: c.to, amount: c.amount } }));
+    const credited = creditedToDeveloper(creditos, {
+      bountyId,
+      developer: e.developer,
+      payout: BigInt(e.paidToDeveloper),
+    });
     return {
       developer: String(e.developer).toLowerCase(),
       paidToDeveloper: BigInt(e.paidToDeveloper),
       protocolFee: BigInt(e.protocolFee),
       evidenceHash: String(e.evidenceHash).toLowerCase(),
       tx: e.tx,
+      credited,
     };
   }
   return null;
