@@ -396,25 +396,46 @@ export async function builderRecord({ login }) {
 
 // ─────────────────────── 5 · Preparar un bounty (firma el humano) ───────────────────────
 
-export function fundLink({ issue_url, amount_eth = "0.0005" }) {
+export async function fundLink({ issue_url, amount_eth = "0.0005" }) {
   const issue = parseIssue(issue_url);
   if (!issue) throw new Error("a bounty pays for one GitHub issue: give a link like https://github.com/owner/repo/issues/12");
   const monto = eth(wei(amount_eth));
   if (wei(monto) === 0n) throw new Error("the amount must be more than zero");
   const uri = `https://github.com/${issue.owner}/${issue.repo}/issues/${issue.number}`;
   const link = `${SITE}/post?` + new URLSearchParams({ uri, amount: monto }).toString();
-  return {
+  const out = {
     link,
     issue: uri,
     reward_eth: monto,
     who_signs: "The user, in their own wallet, on that page. Do not try to sign or send this transaction yourself.",
-    what_the_page_does: "Checks that the repository can pay (Mergit workflow, CI), then locks the ETH in the escrow on GIWA Sepolia and returns the `Bounty: #N` line to paste in the issue.",
+    what_the_page_does: "Checks that the repository can pay (Mergit workflow, CI), then locks the ETH in the escrow on GIWA Sepolia and returns the `Bounty: #N` line to paste in the pull request.",
     before_funding: [
       "The issue should state what done looks like as facts a machine can check (tests that pass, a function that returns X). Use the prompt `write_bounty_spec`.",
       "Label the issue `bounty` so it shows in the lists.",
       `If the repository is not connected yet: ${SITE}/start`,
     ],
   };
+
+  try {
+    const bounties = (await Promise.all(
+      Object.values(ESCROWS).map(({ address }) => listBounties({ address })),
+    )).flat();
+    out.already_funded = bounties
+      .filter((b) => isLive(b) && pointsAtIssue(b.uri, issue.owner, issue.repo, issue.number))
+      .map((b) => ({
+        bounty: Number(b.id),
+        escrow: b.escrow,
+        reward_eth: eth(b.amount),
+        deadline: new Date(b.deadline * 1000).toISOString(),
+      }));
+    if (out.already_funded.length) {
+      out.warning = "This issue already has a live bounty. One bounty per issue: pick another issue or do not fund this one again.";
+    }
+  } catch {
+    out.already_funded = null;
+    out.note = "Could not check the chain for an existing bounty; verify before funding.";
+  }
+  return out;
 }
 
 // ─────────────────────── 6 · Poder cobrar ───────────────────────

@@ -20,11 +20,62 @@ test("parseIssue solo acepta issues de GitHub", () => {
   assert.equal(parseIssue("https://evil.com/github.com/a/b/issues/7"), null);
 });
 
-test("fundLink arma el enlace de /post y no firma nada", () => {
-  const r = fundLink({ issue_url: "https://github.com/a/b/issues/3", amount_eth: "0.0010" });
+test("fundLink arma el enlace de /post y no firma nada", async () => {
+  const anterior = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+  const r = await fundLink({ issue_url: "https://github.com/a/b/issues/3", amount_eth: "0.0010" });
+  globalThis.fetch = anterior;
   assert.equal(r.link, "https://www.mergit.xyz/post?uri=https%3A%2F%2Fgithub.com%2Fa%2Fb%2Fissues%2F3&amount=0.001");
-  assert.throws(() => fundLink({ issue_url: "https://github.com/a/b", amount_eth: "1" }));
-  assert.throws(() => fundLink({ issue_url: "https://github.com/a/b/issues/3", amount_eth: "0" }));
+  assert.deepEqual(r.already_funded, []);
+  await assert.rejects(() => fundLink({ issue_url: "https://github.com/a/b", amount_eth: "1" }));
+  await assert.rejects(() => fundLink({ issue_url: "https://github.com/a/b/issues/3", amount_eth: "0" }));
+});
+
+const respuestaDeLogs = (items) => new Response(JSON.stringify({ items }), {
+  status: 200, headers: { "content-type": "application/json" },
+});
+const eventoPublicado = (id, uri, deadline) => ({
+  decoded: {
+    method_call: "BountyPosted(uint256,address,address,uint256,uint256,string)",
+    parameters: [
+      { name: "bountyId", value: String(id) }, { name: "funder", value: "0x1" },
+      { name: "verifier", value: AGENT }, { name: "amount", value: "500000000000000" },
+      { name: "deadline", value: String(deadline) }, { name: "metadataURI", value: uri },
+    ],
+  }, transaction_hash: "0xtx",
+});
+
+test("fundLink avisa si el issue ya tiene un bounty vivo", async () => {
+  const anterior = globalThis.fetch;
+  const ahora = Math.floor(Date.now() / 1000);
+  globalThis.fetch = async (url) => url.includes("ffcf")
+    ? respuestaDeLogs([eventoPublicado(8, "https://github.com/a/b/issues/3", ahora + 3600)])
+    : respuestaDeLogs([]);
+  const r = await fundLink({ issue_url: "https://github.com/a/b/issues/3" });
+  globalThis.fetch = anterior;
+  assert.deepEqual(r.already_funded, [{ bounty: 8, escrow: "v1", reward_eth: "0.0005", deadline: new Date((ahora + 3600) * 1000).toISOString() }]);
+  assert.match(r.warning, /one bounty per issue/i);
+});
+
+test("fundLink no cuenta un bounty vencido", async () => {
+  const anterior = globalThis.fetch;
+  globalThis.fetch = async (url) => url.includes("ffcf")
+    ? respuestaDeLogs([eventoPublicado(9, "https://github.com/a/b/issues/3", 1)])
+    : respuestaDeLogs([]);
+  const r = await fundLink({ issue_url: "https://github.com/a/b/issues/3" });
+  globalThis.fetch = anterior;
+  assert.deepEqual(r.already_funded, []);
+  assert.equal(r.warning, undefined);
+});
+
+test("fundLink conserva el enlace si no puede leer el explorador", async () => {
+  const anterior = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("sin red"); };
+  const r = await fundLink({ issue_url: "https://github.com/a/b/issues/3" });
+  globalThis.fetch = anterior;
+  assert.equal(r.already_funded, null);
+  assert.match(r.note, /could not check/i);
+  assert.match(r.link, /mergit\.xyz\/post/);
 });
 
 test("la lista deja fuera lo que no es un issue, lo vencido y lo pagado, y marca issues compartidos", async () => {
