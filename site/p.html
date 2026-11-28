@@ -218,14 +218,17 @@ const EXPLORER = "https://sepolia-explorer.giwa.io";
 const GH = "https://api.github.com";
 const REGISTRY = "0x79d44543d20c7c6653f6626687d67d2cd7f2af9c";
 
-// Los dos escrows. La v1 guarda la historia de pagos; la v2 suma la ventana de
-// objeción. Un perfil honesto tiene que mirar los dos y decir cuál fue cuál.
+// Los cuatro escrows. La v1 guarda la historia de pagos; la v2 suma la ventana de
+// objeción; la v3, el plazo prorrogable; la v4 acredita el pago cuando no puede
+// entregarlo. Un perfil honesto tiene que mirar los cuatro y decir cuál fue cuál.
 // `from` es el primer bounty con un pull request real detrás: en la v1 los dos
 // primeros fueron pruebas del contrato el 31-jul, sin trabajo que pagar, y no
 // cuentan como historial de nadie. Es la misma regla que aplica media/live.js.
 const ESCROWS = [
   { v: "v1", address: "0xffcf206ce1474263aaa3336fb9c8bc3d632e5879", from: 3 },
   { v: "v2", address: "0x48d506080abdbed11f1acbe40f799301d9612ad5", from: 1 },
+  { v: "v3", address: "0x557ca3bae18c25438768ea2b5f8b7c1e57c4ecb0", from: 1 },
+  { v: "v4", address: "0x9968834566b8be8fb023e7c81e95597d713edf2b", from: 1 },
 ];
 
 const ABI = [
@@ -574,6 +577,7 @@ function tagFor(state) {
   if (state === "paid") return '<span class="tag good"><i></i>Paid</span>';
   if (state === "self") return '<span class="tag"><i></i>Self-funded</span>';
   if (state === "pending") return '<span class="tag wait"><i></i>Pending</span>';
+  if (state === "credited") return '<span class="tag wait"><i></i>Credited, waiting to be withdrawn</span>';
   return '<span class="tag bad"><i></i>Unknown</span>';
 }
 
@@ -650,9 +654,9 @@ document.addEventListener("click", async (e) => {
   setTimeout(() => (b.textContent = antes), 1600);
 });
 
-function renderPayments(wallet, paid, pending, abiertos) {
+function renderPayments(wallet, paid, pending, credited, abiertos) {
   const out = $("paid-out");
-  if (!paid.length && !pending.length) {
+  if (!paid.length && !pending.length && !credited.length) {
     // Un expediente vacío no se queda en "nada que enseñar": enseña lo que hay
     // abierto ahora mismo. Es la única pantalla que ve alguien que todavía no
     // cobró, y es la que tiene que decirle qué hacer.
@@ -679,7 +683,7 @@ function renderPayments(wallet, paid, pending, abiertos) {
         : "");
     return;
   }
-  const rows = [...pending, ...paid].map((e) => {
+  const rows = [...pending, ...credited, ...paid].map((e) => {
     const when = e.time ? day(e.time) : "";
     const amount = e.paidToDeveloper ? `${eth(e.paidToDeveloper)} ETH` : "waiting";
     const fee = e.protocolFee ? `${eth(e.protocolFee)} ETH` : "—";
@@ -761,7 +765,7 @@ async function load() {
   renderClaim(login, claim, proof);
   renderShow(login);
 
-  // Los pagos: los dos escrows, con la etiqueta de cuál fue.
+  // Los pagos: los escrows, con la etiqueta de cuál fue.
   const want = claim.wallet.toLowerCase();
 
   // Las wallets anteriores de este login, cada una con su ventana. Solo se
@@ -780,6 +784,7 @@ async function load() {
   };
   const paid = [];
   const pending = [];
+  const credited = [];
   const abiertos = [];
   let reached = 0;
   for (const { v, address, from } of ESCROWS) {
@@ -809,6 +814,19 @@ async function load() {
         if (b.deadline && b.deadline <= ahora) continue;
         abiertos.push({ id, ...b });
       }
+      // Un pago que la v4 no pudo entregar se acredita al desarrollador en vez
+      // de pagarse: el mismo bounty sigue emitiendo BountySettled con el pago
+      // completo, así que un pago acreditado no debe leerse como pagado. Solo
+      // cuenta cuando un crédito nombra a este desarrollador por el pago entero
+      // (la comisión también puede acreditarse, a otro destinatario, y eso no
+      // convierte el pago del desarrollador en crédito).
+      const acreditados = new Map();
+      for (const e of events) {
+        if (e.kind !== "PaymentCredited") continue;
+        const lista = acreditados.get(String(e.bountyId)) ?? [];
+        lista.push({ to: String(e.to ?? "").toLowerCase(), amount: e.amount });
+        acreditados.set(String(e.bountyId), lista);
+      }
       for (const e of events) {
         if (!esSuya(e.developer, e.time)) continue;
         if (Number(e.bountyId) < from) continue;
@@ -816,20 +834,28 @@ async function load() {
         const self = funder === want;
         const uri = (puestos.get(String(e.bountyId)) || {}).uri;
         const antigua = String(e.developer || "").toLowerCase() !== want;
-        if (e.kind === "BountySettled") paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : "paid" });
+        if (e.kind === "BountySettled") {
+          const lista = acreditados.get(String(e.bountyId)) ?? [];
+          const acreditado = lista.some((c) => c.to === String(e.developer || "").toLowerCase()
+            && BigInt(c.amount ?? 0) === BigInt(e.paidToDeveloper ?? 0));
+          if (acreditado) credited.push({ ...e, v, funder, self, uri, antigua, state: "credited" });
+          else paid.push({ ...e, v, funder, self, uri, antigua, state: self ? "self" : "paid" });
+        }
         if (e.kind === "SettlementProposed") pending.push({ ...e, v, funder, self, uri, antigua, state: "pending" });
       }
     } catch {
       // un escrow que no responde no puede inventar un pago: se cuenta como no leído
     }
   }
-  // Un pago ya liquidado deja de estar pendiente.
-  const settledIds = new Set(paid.map((e) => `${e.v}#${e.bountyId}`));
+  // Un pago ya liquidado deja de estar pendiente. Un pago acreditado también
+  // está liquidado: se pagó en crédito, no en entrega, y no es pendiente.
+  const settledIds = new Set([...paid, ...credited].map((e) => `${e.v}#${e.bountyId}`));
   const stillPending = pending.filter((e) => !settledIds.has(`${e.v}#${e.bountyId}`));
 
   paid.sort((a, b) => Number(b.block) - Number(a.block));
   stillPending.sort((a, b) => Number(b.block) - Number(a.block));
-  renderPayments(claim.wallet, paid, stillPending, abiertos);
+  credited.sort((a, b) => Number(b.block) - Number(a.block));
+  renderPayments(claim.wallet, paid, stillPending, credited, abiertos);
 
   // El titular solo cuenta lo que pagó otro. Lo que alguien se paga a sí mismo
   // se muestra, porque está en la cadena, pero no suma a su historial.
@@ -852,6 +878,7 @@ async function load() {
   $("s-count-sub").textContent = [
     stillPending.length ? `${stillPending.length} waiting out a challenge window` : "",
     selfFunded ? `${selfFunded} self-funded, not counted` : "",
+    credited.length ? `${credited.length} credited, waiting to be withdrawn` : "",
   ].filter(Boolean).join(" · ") || "paid by somebody else";
   if (claim.source === "profile") {
     $("s-since-label").textContent = "Wallet comes from";
@@ -864,7 +891,7 @@ async function load() {
 
   $("src").textContent = reached === ESCROWS.length ? "read from the chain" : "partially read";
   $("paid-note").textContent = reached !== ESCROWS.length
-    ? "One of the two escrows did not answer, so this list may be incomplete. Reload in a moment."
+    ? "One of the escrows did not answer, so this list may be incomplete. Reload in a moment."
     : claim.source === "profile"
       ? "The record follows every address this login has published, not just today's. Change the address in your README and what you were already paid stays here."
       : "Payments made before this login was claimed may have gone to a different address, and would not appear here. The record follows the wallet in the registry, not the person.";
